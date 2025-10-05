@@ -1,0 +1,48 @@
+{
+  "_comment": "Example email configuration for USD Rate Scraper",
+  "_note": "Copy this to ~/.usd_scraper.cfg and update with your settings",
+  "_security": "Passwords are never saved - you'll be prompted each time",
+  
+  "to_email": "your-email@example.com",
+  "smtp_server": "smtp.gmail.com",
+  "smtp_port": 587,
+  "username": "your-email@gmail.com",
+  
+  "_smtp_servers": {
+    "gmail": {
+      "server": "smtp.gmail.com",
+      "port": 587,
+      "notes": "Requires App Password (enable 2FA first)"
+    },
+    "outlook": {
+      "server": "smtp-mail.outlook.com", 
+      "port": 587,
+      "notes": "Use Microsoft account credentials"
+    },
+    "yahoo": {
+      "server": "smtp.mail.yahoo.com",
+      "port": 587,
+      "notes": "Requires App Password"
+    },
+    "mailtrap": {
+      "server": "sandbox.smtp.mailtrap.io",
+      "port": 587,
+      "notes": "Best for testing - emails are captured, not sent"
+    }
+  },
+  
+  "_setup_instructions": {
+    "gmail": [
+      "1. Enable 2-Factor Authentication on your Google account",
+      "2. Go to Account Settings > Security > App passwords",
+      "3. Generate an app password for 'Mail'", 
+      "4. Use the app password (not your regular password) in the scraper"
+    ],
+    "mailtrap": [
+      "1. Sign up at https://mailtrap.io (free tier available)",
+      "2. Create an inbox and get SMTP credentials",
+      "3. Use the provided username and password",
+      "4. All emails are captured for testing - nothing is actually sent"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create locust user
+RUN groupadd -r locust && useradd -r -g locust locust
+
+# Set work directory
+WORKDIR /app
+
+# Install Locust and dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir \
+    locust>=2.17.0 \
+    httpx>=0.24.0 \
+    faker>=19.0.0
+
+# Copy locust files
+COPY tests/load/ ./locustfiles/
+
+# Create reports directory
+RUN mkdir -p /app/reports && \
+    chown -R locust:locust /app
+
+# Switch to locust user
+USER locust
+
+# Expose port
+EXPOSE 8089
+
+# Default command
+CMD ["locust", "-f", "/app/locustfiles/test_api.py", "--host", "http://test_api:8000"]

@@ -1,0 +1,68 @@
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install system dependencies including those needed for Playwright
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    wget \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Set work directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright browsers and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    fonts-noto-color-emoji \
+    fonts-unifont \
+    fonts-liberation \
+    fonts-freefont-ttf \
+    && rm -rf /var/lib/apt/lists/* \
+    && playwright install chromium
+
+# Copy project
+COPY app/ ./app/
+COPY migrations/ ./migrations/
+COPY alembic.ini .
+
+# Create storage directories
+RUN mkdir -p /tmp/scraper-storage/screenshots && \
+    chown -R appuser:appuser /tmp/scraper-storage && \
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /ms-playwright
+
+# Switch to non-root user
+USER appuser
+
+# Health check - simple Python script to check if worker can start
+HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
+    CMD python -c "import asyncio; from app.core.redis import get_redis; asyncio.run(get_redis().ping())" || exit 1
+
+# Run the worker
+CMD ["python", "-m", "app.worker.scraper_worker"]

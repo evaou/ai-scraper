@@ -1,0 +1,195 @@
+services:
+  # Test PostgreSQL Database
+  test_db:
+    image: postgres:15-alpine
+    container_name: scraper_test_db
+    environment:
+      - POSTGRES_DB=scraper_test
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_password
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - ./docker/init-test.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d scraper_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - test_network
+    tmpfs:
+      - /var/lib/postgresql/data:noexec,nosuid,size=100m
+
+  # Test Redis
+  test_redis:
+    image: redis:7-alpine
+    container_name: scraper_test_redis
+    command: redis-server --save "" --appendonly no --requirepass ""
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - test_network
+    tmpfs:
+      - /data:noexec,nosuid,size=100m
+
+  # Test API Service
+  test_api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test
+    container_name: scraper_test_api
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://test_user:test_password@test_db:5432/scraper_test
+      - REDIS_URL=redis://test_redis:6379/0
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - API_WORKERS=1
+      - TESTING=true
+      - PYTEST_CURRENT_TEST=true
+    volumes:
+      - ./app:/app/app:ro
+      - ./tests:/app/tests:ro
+      - ./migrations:/app/migrations:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - test_coverage:/app/coverage
+    depends_on:
+      test_db:
+        condition: service_healthy
+      test_redis:
+        condition: service_healthy
+    networks:
+      - test_network
+    command: >
+      sh -c "
+        echo 'Waiting for services...' &&
+        sleep 10 &&
+        echo 'Running database migrations...' &&
+        alembic upgrade head &&
+        echo 'Starting tests...' &&
+        pytest tests/ -v 
+          --cov=app 
+          --cov-report=html:/app/coverage/html 
+          --cov-report=xml:/app/coverage/coverage.xml 
+          --cov-report=term-missing 
+          --cov-fail-under=80
+          --junitxml=/app/coverage/junit.xml
+          --tb=short
+      "
+
+  # Test Worker
+  test_worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test-worker
+    container_name: scraper_test_worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://test_user:test_password@test_db:5432/scraper_test
+      - REDIS_URL=redis://test_redis:6379/0
+      - WORKER_CONCURRENCY=1
+      - LOG_LEVEL=DEBUG
+      - PLAYWRIGHT_BROWSER=chromium
+      - TESTING=true
+    volumes:
+      - ./app:/app/app:ro
+      - ./tests:/app/tests:ro
+      - test_browser_cache:/app/.cache
+    depends_on:
+      test_db:
+        condition: service_healthy
+      test_redis:
+        condition: service_healthy
+    networks:
+      - test_network
+    profiles:
+      - integration-tests
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+
+  # Test database migration runner
+  test_migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.test
+    container_name: scraper_test_migrate
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://test_user:test_password@test_db:5432/scraper_test
+    volumes:
+      - ./migrations:/app/migrations:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./app:/app/app:ro
+    depends_on:
+      test_db:
+        condition: service_healthy
+    networks:
+      - test_network
+    profiles:
+      - migration-test
+    command: >
+      sh -c "
+        echo 'Testing database migrations...' &&
+        alembic upgrade head &&
+        alembic downgrade base &&
+        alembic upgrade head &&
+        echo 'Migration tests completed successfully!'
+      "
+
+  # Load testing service
+  locust:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.locust
+    container_name: scraper_locust
+    ports:
+      - "8089:8089"
+    environment:
+      - LOCUST_HOST=http://test_api:8000
+      - LOCUST_USERS=10
+      - LOCUST_SPAWN_RATE=2
+      - LOCUST_RUN_TIME=60s
+    volumes:
+      - ./tests/load:/app/locustfiles:ro
+      - load_test_reports:/app/reports
+    depends_on:
+      - test_api
+    networks:
+      - test_network
+    profiles:
+      - load-test
+    command: >
+      locust 
+        -f /app/locustfiles/test_api.py 
+        --host=http://test_api:8000 
+        --users=10 
+        --spawn-rate=2 
+        --run-time=60s 
+        --html=/app/reports/load_test_report.html
+        --csv=/app/reports/load_test_results
+
+volumes:
+  test_postgres_data:
+    driver: local
+  test_coverage:
+    driver: local
+  test_browser_cache:
+    driver: local
+  load_test_reports:
+    driver: local
+
+networks:
+  test_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
