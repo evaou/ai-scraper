@@ -250,12 +250,7 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 # Exclude manual and load test files from automated test runs
-ignore = [
-    "tests/manual_test.py",
-    "tests/load/test_api.py",
-]
-python_functions = ["test_*"]
-python_classes = ["Test*"]
+# Use --ignore-glob to exclude specific files
 addopts = [
     "--strict-markers",
     "--strict-config",
@@ -268,7 +263,11 @@ addopts = [
     "--cov-fail-under=90",
     "--maxfail=10",
     "--tb=short",
+    "--ignore=tests/manual_test.py",
+    "--ignore=tests/load/test_api.py",
 ]
+python_functions = ["test_*"]
+python_classes = ["Test*"]
 filterwarnings = [
     "ignore::UserWarning",
     "ignore::DeprecationWarning",
