@@ -164,7 +164,7 @@ class ScrapingMetadataFactory(factory.Factory):
         "user_agent": fake.user_agent(),
         "viewport": {"width": 1920, "height": 1080}
     })
-    timestamp = factory.LazyFunction(lambda: fake.date_time_this_hour())
+    timestamp = factory.LazyFunction(lambda: fake.date_time_this_year())
 
 
 class ResultFactory(factory.Factory):

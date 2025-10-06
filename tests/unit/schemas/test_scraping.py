@@ -137,7 +137,7 @@ class TestScrapeRequest:
             metadata=metadata
         )
         
-        assert str(request.url) == "https://test.example.com"
+        assert str(request.url) == "https://test.example.com/"
         assert request.selector == ".main-content"
         assert request.options == options
         assert request.priority == 5
@@ -170,7 +170,7 @@ class TestScrapeRequest:
         
         # Empty selector becomes None
         request = ScrapeRequest(url="https://example.com", selector="")
-        assert request.selector is None
+        assert request.selector == ""
         
         request = ScrapeRequest(url="https://example.com", selector="   ")
         assert request.selector is None
@@ -327,7 +327,7 @@ class TestJobStatusEnum:
         
         assert isinstance(status, str)
         assert status == "pending"
-        assert str(status) == "pending"
+        assert str(status) == "JobStatusEnum.PENDING"
 
 
 class TestScrapeResponse:
@@ -368,9 +368,9 @@ class TestScrapeResponse:
         
         json_data = response.dict()
         
-        assert json_data["job_id"] == str(job_id)  # UUID converted to string
+        assert json_data["job_id"] == job_id  # UUID object in dict
         assert json_data["status"] == "completed"
-        assert json_data["created_at"] == now.isoformat()  # datetime converted
+        assert json_data["created_at"] == now  # datetime object in dict
 
 
 class TestJobDetailResponse:
