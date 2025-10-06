@@ -89,27 +89,53 @@ async def setup_test_db(test_engine):
 @pytest_asyncio.fixture
 async def db_session(test_engine, setup_test_db) -> AsyncGenerator[AsyncSession, None]:
     """Get database session for testing with transaction rollback."""
-    async with test_engine.begin() as conn:
-        async_session = sessionmaker(
-            conn, class_=AsyncSession, expire_on_commit=False
-        )
-        async with async_session() as session:
+    # Create a connection for the test
+    connection = await test_engine.connect()
+    
+    # Begin a transaction
+    transaction = await connection.begin()
+    
+    # Create session bound to this connection/transaction
+    async_session_factory = sessionmaker(
+        bind=connection,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+    
+    try:
+        async with async_session_factory() as session:
             yield session
-            await session.rollback()
+    finally:
+        # Always rollback the transaction and close connection
+        await transaction.rollback()
+        await connection.close()
 
 
 @pytest.fixture
 def mock_redis():
     """Mock Redis client for testing."""
     mock_redis = MagicMock(spec=Redis)
-    mock_redis.ping.return_value = True
-    mock_redis.get.return_value = None
-    mock_redis.set.return_value = True
-    mock_redis.delete.return_value = 1
-    mock_redis.flushdb.return_value = True
-    mock_redis.exists.return_value = False
-    mock_redis.expire.return_value = True
-    mock_redis.ttl.return_value = -1
+    
+    # Mock all Redis methods as async
+    mock_redis.ping = AsyncMock(return_value=True)
+    mock_redis.get = AsyncMock(return_value=None)
+    mock_redis.set = AsyncMock(return_value=True)
+    mock_redis.setex = AsyncMock(return_value=True)
+    mock_redis.delete = AsyncMock(return_value=1)
+    mock_redis.flushdb = AsyncMock(return_value=True)
+    mock_redis.exists = AsyncMock(return_value=False)
+    mock_redis.expire = AsyncMock(return_value=True)
+    mock_redis.ttl = AsyncMock(return_value=-1)
+    mock_redis.incr = AsyncMock(return_value=1)
+    mock_redis.zadd = AsyncMock(return_value=1)
+    mock_redis.bzpopmax = AsyncMock(return_value=None)
+    mock_redis.zrem = AsyncMock(return_value=1)
+    mock_redis.zcard = AsyncMock(return_value=0)
+    mock_redis.time = AsyncMock(return_value=[1234567890, 0])
+    mock_redis.zremrangebyscore = AsyncMock(return_value=0)
+    mock_redis.zrange = AsyncMock(return_value=[])
+    mock_redis.close = AsyncMock()
+    
     return mock_redis
 
 
@@ -120,7 +146,7 @@ async def redis_client(mock_redis):
 
 
 @pytest_asyncio.fixture
-async def client(db_session, redis_client) -> AsyncGenerator[AsyncClient, None]:
+async def client(db_session, redis_client, monkeypatch) -> AsyncGenerator[AsyncClient, None]:
     """Get HTTP client with dependency overrides for testing."""
     from httpx import ASGITransport
     
@@ -129,6 +155,26 @@ async def client(db_session, redis_client) -> AsyncGenerator[AsyncClient, None]:
     
     def override_get_redis():
         return redis_client
+    
+    # Mock cache functions to avoid event loop issues
+    async def mock_rate_limit_check(*args, **kwargs):
+        return {"allowed": True, "current_count": 0, "limit": 100}
+    
+    # Mock Redis initialization functions
+    async def mock_init_redis():
+        return redis_client
+        
+    def mock_get_redis_client():
+        return redis_client
+        
+    async def mock_get_redis():
+        return redis_client
+    
+    # Patch all Redis-related functions
+    monkeypatch.setattr("app.core.cache.rate_limit_check", mock_rate_limit_check)
+    monkeypatch.setattr("app.core.redis.init_redis", mock_init_redis)
+    monkeypatch.setattr("app.core.redis.get_redis", mock_get_redis)
+    monkeypatch.setattr("app.core.cache.get_redis_client", mock_get_redis_client)
     
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_redis] = override_get_redis

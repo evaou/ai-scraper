@@ -58,7 +58,8 @@ class Job(Base):
     # Additional indexes for query optimization
     __table_args__ = (
         Index("ix_jobs_status_created_at", "status", "created_at"),
-        Index("ix_jobs_url_hash", func.md5(url)),  # For efficient duplicate URL detection
+        # Note: MD5 index for duplicate URL detection only works in PostgreSQL
+        # For SQLite, we'll rely on the regular url index
         Index("ix_jobs_priority_status", "priority", "status"),
     )
 

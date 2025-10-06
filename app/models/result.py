@@ -60,7 +60,8 @@ class Result(Base):
     # Additional indexes for performance
     __table_args__ = (
         Index("ix_results_job_created", "job_id", "created_at"),
-        Index("ix_results_data_gin", "data", postgresql_using="gin"),  # GIN index for JSONB queries
+        # Note: GIN index for JSONB queries only works in PostgreSQL
+        # For SQLite, we'll rely on regular JSON indexing capabilities
         Index("ix_results_status_code", "status_code"),
         Index("ix_results_size_bytes", "size_bytes"),
     )
