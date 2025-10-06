@@ -20,8 +20,9 @@ jobs:
           POSTGRES_PASSWORD: password
           POSTGRES_USER: postgres
           POSTGRES_DB: test_scraper
+          PGDATA: /var/lib/postgresql/data/pgdata
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -73,24 +74,42 @@ jobs:
     - name: Wait for services to be ready
       run: |
         # Wait for PostgreSQL
+        echo "Waiting for PostgreSQL to be ready..."
+        postgres_ready=false
         for i in {1..30}; do
-          if pg_isready -h localhost -p 5432 -U postgres; then
-            echo "PostgreSQL is ready"
+          if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
+            echo "✅ PostgreSQL is ready"
+            postgres_ready=true
             break
           fi
-          echo "Waiting for PostgreSQL... ($i/30)"
+          echo "⏳ Waiting for PostgreSQL... ($i/30)"
           sleep 2
         done
         
+        if [ "$postgres_ready" != "true" ]; then
+          echo "❌ PostgreSQL failed to become ready after 60 seconds"
+          exit 1
+        fi
+        
         # Wait for Redis
+        echo "Waiting for Redis to be ready..."
+        redis_ready=false
         for i in {1..30}; do
-          if redis-cli -h localhost -p 6379 ping; then
-            echo "Redis is ready"
+          if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
+            echo "✅ Redis is ready"
+            redis_ready=true
             break
           fi
-          echo "Waiting for Redis... ($i/30)"
+          echo "⏳ Waiting for Redis... ($i/30)"
           sleep 2
         done
+        
+        if [ "$redis_ready" != "true" ]; then
+          echo "❌ Redis failed to become ready after 60 seconds"
+          exit 1
+        fi
+        
+        echo "🎉 All services are ready!"
         
     - name: Run tests
       env:
@@ -168,7 +187,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && secrets.LINODE_HOST != ''
 
     steps:
     - name: Checkout repository
@@ -262,7 +281,7 @@ jobs:
   rollback:
     needs: [deploy]
     runs-on: ubuntu-latest
-    if: failure() && github.ref == 'refs/heads/main'
+    if: failure() && github.ref == 'refs/heads/main' && secrets.LINODE_HOST != ''
     steps:
     - name: Rollback on deployment failure
       uses: appleboy/ssh-action@v1.0.3
@@ -297,8 +316,27 @@ jobs:
             echo "⚠️ No backup found for rollback"
           fi
 
+  deployment-skipped:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && secrets.LINODE_HOST == ''
+    steps:
+    - name: Deployment skipped
+      run: |
+        echo "⏭️ Deployment skipped - server secrets not configured"
+        echo ""
+        echo "To enable deployment, configure the following secrets in GitHub:"
+        echo "  • LINODE_HOST - Your deployment server IP/hostname"
+        echo "  • LINODE_USER - SSH username for your server"
+        echo "  • SSH_PRIVATE_KEY - SSH private key content"
+        echo "  • POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD - Database credentials"
+        echo "  • REDIS_PASSWORD - Redis password"
+        echo "  • JWT_SECRET_KEY - JWT signing secret"
+        echo ""
+        echo "✅ Build and push completed successfully!"
+
   notify:
-    needs: [deploy, rollback]
+    needs: [deploy, rollback, deployment-skipped]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -308,6 +346,8 @@ jobs:
           echo "✅ Deployment to Linode successful!"
         elif [ "${{ needs.rollback.result }}" == "success" ]; then
           echo "🔄 Deployment failed but rollback successful"
+        elif [ "${{ needs.deployment-skipped.result }}" == "success" ]; then
+          echo "⏭️ Build successful, deployment skipped (secrets not configured)"
         else
-          echo "❌ Deployment failed!"
+          echo "❌ Workflow completed with issues"
         fi
