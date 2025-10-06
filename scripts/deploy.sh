@@ -10,6 +10,10 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Clean up any existing containers to avoid port conflicts
+echo "🧹 Cleaning up existing containers..."
+docker compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || echo "No existing containers to clean up"
+
 # Function to safely load environment variables
 load_env() {
     local env_file=$1
@@ -201,15 +205,9 @@ echo "🔍 Testing health endpoints..."
 while [ $health_attempt -le $max_health_attempts ]; do
     echo "Health check attempt $health_attempt/$max_health_attempts..."
     
-    # Test nginx proxy health endpoint
+    # Test nginx proxy health endpoint (only way to access API in production)
     if curl -f -m 10 http://localhost/health > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Application is healthy and responding via nginx${NC}"
-        break
-    fi
-    
-    # Test direct API health endpoint as fallback
-    if curl -f -m 10 http://localhost:8000/api/v1/health/live > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Application is healthy and responding directly${NC}"
+        echo -e "${GREEN}✅ Application is healthy and responding via nginx proxy${NC}"
         break
     fi
     
@@ -226,11 +224,11 @@ while [ $health_attempt -le $max_health_attempts ]; do
         docker compose -f docker-compose.prod.yml logs nginx --tail=15
         echo ""
         echo "Network connectivity test:"
-        echo "Testing direct API connection:"
-        curl -v -m 5 http://localhost:8000/api/v1/health/live 2>&1 || echo "Direct API connection failed"
-        echo ""
-        echo "Testing nginx proxy:"
+        echo "Testing nginx proxy (only exposed endpoint):"
         curl -v -m 5 http://localhost/health 2>&1 || echo "Nginx proxy connection failed"
+        echo ""
+        echo "Testing internal API health via docker exec:"
+        docker compose -f docker-compose.prod.yml exec -T api curl -f http://localhost:8000/api/v1/health/live 2>&1 || echo "Internal API connection failed"
         exit 1
     fi
     
