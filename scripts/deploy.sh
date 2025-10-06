@@ -48,7 +48,7 @@ rollback() {
         cp .env.prod.backup .env.prod
         export $(cat .env.prod | grep -v '^#' | xargs)
         
-        # Restore docker-compose file if backed up
+        # Restore docker compose file if backed up
         if [ -f "docker-compose.prod.yml.backup" ]; then
             cp docker-compose.prod.yml.backup docker-compose.prod.yml
         fi

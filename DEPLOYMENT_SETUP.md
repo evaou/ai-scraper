@@ -16,9 +16,18 @@
 2. Copy and run the setup script:
 
 ```bash
-# Copy the linode-setup.sh script to your server and run:
+# Download and run the setup script:
+wget https://raw.githubusercontent.com/evaou/ai-scraper/main/linode-setup.sh
 chmod +x linode-setup.sh
 ./linode-setup.sh
+```
+
+3. **Validate the setup:**
+```bash
+# Download and run the validation script:
+wget https://raw.githubusercontent.com/evaou/ai-scraper/main/validate-deployment.sh
+chmod +x validate-deployment.sh
+./validate-deployment.sh
 ```
 
 ### 1.3 Add SSH Key for GitHub Actions
@@ -30,11 +39,31 @@ chmod 600 ~/.ssh/authorized_keys
 chmod 700 ~/.ssh
 ```
 
-## Step 2: Configure GitHub Secrets
+## Step 2: Verify Docker Compose V2
+
+**Important:** This deployment uses the modern `docker compose` command (V2), not the legacy `docker-compose` command.
+
+### 2.1 Check Docker Compose Version
+```bash
+# On your Linode server, verify Docker Compose V2:
+docker compose version
+
+# Should show something like:
+# Docker Compose version v2.x.x
+```
+
+### 2.2 Benefits of Docker Compose V2
+- ✅ **Built into Docker** - No separate installation needed
+- ✅ **Better performance** - Faster startup and operations
+- ✅ **Improved CLI** - Better error messages and user experience
+- ✅ **Active development** - Regular updates and new features
+- ✅ **Production ready** - Recommended for all new deployments
+
+## Step 3: Configure GitHub Secrets
 
 Go to your GitHub repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
-### 2.1 Server Connection Secrets
+### 3.1 Server Connection Secrets
 
 | Secret Name | Value | Example |
 |-------------|-------|---------|
@@ -53,7 +82,7 @@ osS3sTBbatsngjXHHZezAAAAGWdpdGh1Yi1hY3Rpb25zLWFpLXNjcmFwZXIBAgME
 -----END OPENSSH PRIVATE KEY-----
 ```
 
-### 2.2 Application Secrets
+### 3.2 Application Secrets
 
 Generate strong passwords:
 ```bash
@@ -71,15 +100,15 @@ openssl rand -base64 32  # For JWT secret
 | `REDIS_PASSWORD` | Redis password | `generated_redis_pass_456` |
 | `JWT_SECRET_KEY` | JWT signing secret | `super_long_random_jwt_secret_key` |
 
-## Step 3: Trigger Deployment
+## Step 4: Trigger Deployment
 
-### 3.1 Test SSH Connection First
+### 4.1 Test SSH Connection First
 ```bash
 # Test SSH connection locally:
 ssh -i ~/.ssh/github_actions_ai_scraper root@YOUR_SERVER_IP
 ```
 
-### 3.2 Trigger Deployment
+### 4.2 Trigger Deployment
 Once all secrets are configured, deploy by:
 
 **Option A: Push to main branch**
@@ -94,37 +123,37 @@ git push origin main
 2. Click "Deploy to Linode" workflow
 3. Click "Run workflow" → "Run workflow"
 
-## Step 4: Monitor Deployment
+## Step 5: Monitor Deployment
 
-### 4.1 Watch GitHub Actions
+### 5.1 Watch GitHub Actions
 - Go to **Actions** tab in your GitHub repo
 - Click on the running workflow
 - Monitor each job: Test → Build & Push → Deploy
 
-### 4.2 Check Server Status
+### 5.2 Check Server Status
 ```bash
 # SSH to your server and check:
 ssh root@YOUR_SERVER_IP
 cd /opt/ai-scraper
-docker-compose -f docker-compose.prod.yml ps
-docker-compose -f docker-compose.prod.yml logs -f
+docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs -f
 ```
 
-### 4.3 Verify Deployment
+### 5.3 Verify Deployment
 ```bash
 # Test the API:
 curl http://YOUR_SERVER_IP/api/v1/health/live
 curl http://YOUR_SERVER_IP:8000/api/v1/health/live
 ```
 
-## Step 5: Set Up Domain (Optional)
+## Step 6: Set Up Domain (Optional)
 
-### 5.1 Configure DNS
+### 6.1 Configure DNS
 Point your domain to your Linode server IP:
 - **A Record:** `@` → `YOUR_SERVER_IP`
 - **A Record:** `api` → `YOUR_SERVER_IP` (optional subdomain)
 
-### 5.2 Configure SSL (Optional)
+### 6.2 Configure SSL (Optional)
 ```bash
 # On your server:
 sudo apt install certbot python3-certbot-nginx
@@ -161,8 +190,8 @@ ssh -i ~/.ssh/github_actions_ai_scraper -v root@YOUR_SERVER_IP
 #### 3. Service Health Check Fails
 ```bash
 # Check logs:
-docker-compose -f docker-compose.prod.yml logs api
-docker-compose -f docker-compose.prod.yml logs worker
+docker compose -f docker-compose.prod.yml logs api
+docker compose -f docker-compose.prod.yml logs worker
 ```
 
 #### 4. Deployment Rollback
@@ -172,7 +201,7 @@ The workflow has automatic rollback - check Actions logs for details.
 
 When deployment is successful, you'll see:
 - ✅ All GitHub Actions jobs complete
-- ✅ Services running: `docker-compose ps` shows "Up" status
+- ✅ Services running: `docker compose ps` shows "Up" status
 - ✅ Health check returns 200: `curl http://YOUR_SERVER_IP/api/v1/health/live`
 - ✅ API docs accessible: `http://YOUR_SERVER_IP:8000/api/v1/docs`
 
