@@ -10,6 +10,7 @@ from app.core.config import Settings, get_settings
 class TestSettings:
     """Test cases for Settings class."""
     
+    @patch.dict(os.environ, {}, clear=True)
     def test_default_settings(self):
         """Test default configuration values."""
         settings = Settings()
