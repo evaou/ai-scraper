@@ -62,6 +62,7 @@ echo "POSTGRES_USER: ${POSTGRES_USER:-NOT_SET}"
 echo "POSTGRES_DB: ${POSTGRES_DB:-NOT_SET}"
 echo "DATABASE_URL: ${DATABASE_URL:0:50}... (truncated for security)"
 echo "REDIS_URL: ${REDIS_URL:0:30}... (truncated for security)"
+echo "Full REDIS_URL (for debugging): ${REDIS_URL}"
 
 # Function to check if service is healthy
 check_health() {

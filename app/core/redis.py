@@ -19,14 +19,29 @@ async def init_redis() -> Redis:
     """Initialize Redis connection."""
     global redis_client
 
-    # Parse Redis URL
-    parsed_url = urlparse(str(settings.REDIS_URL))
+    try:
+        # Parse Redis URL
+        parsed_url = urlparse(str(settings.REDIS_URL))
+        
+        # Extract connection parameters with fallbacks
+        host = parsed_url.hostname or "redis"
+        port = parsed_url.port or 6379
+        password = parsed_url.password
+        db = int(parsed_url.path.lstrip("/")) if parsed_url.path and parsed_url.path != "/" else 0
+        
+    except (ValueError, AttributeError) as e:
+        logger.warning(f"Failed to parse REDIS_URL: {e}. Using fallback configuration.")
+        # Fallback to individual environment variables or defaults
+        host = getattr(settings, 'REDIS_HOST', 'redis')
+        port = getattr(settings, 'REDIS_PORT', 6379)
+        password = getattr(settings, 'REDIS_PASSWORD', None)
+        db = getattr(settings, 'REDIS_DB', 0)
 
     redis_client = redis.Redis(
-        host=parsed_url.hostname or "redis",
-        port=parsed_url.port or 6379,
-        db=int(parsed_url.path.lstrip("/")) if parsed_url.path and parsed_url.path != "/" else 0,
-        password=parsed_url.password,
+        host=host,
+        port=int(port),
+        db=int(db),
+        password=password,
         encoding="utf-8",
         decode_responses=True,
         socket_keepalive=True,

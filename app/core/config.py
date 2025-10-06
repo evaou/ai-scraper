@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         default="redis://redis:6379/0",
         description="Redis connection URL"
     )
+    REDIS_HOST: str = Field(default="redis", description="Redis host")
+    REDIS_PORT: int = Field(default=6379, description="Redis port")
+    REDIS_PASSWORD: str | None = Field(default=None, description="Redis password")
+    REDIS_DB: int = Field(default=0, description="Redis database number")
     REDIS_POOL_SIZE: int = Field(default=10, description="Redis connection pool size")
     REDIS_POOL_MAX_CONNECTIONS: int = Field(default=20, description="Redis max connections")
 

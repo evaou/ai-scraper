@@ -223,6 +223,9 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
 
           # Create environment file for production
+          # URL encode the Redis password to handle special characters
+          REDIS_PASSWORD_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('${{ secrets.REDIS_PASSWORD }}', safe=''))")
+
           {
             echo "# Database Configuration"
             echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
@@ -232,7 +235,10 @@ jobs:
             echo ""
             echo "# Redis Configuration"
             echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}"
-            echo "REDIS_URL=redis://:${{ secrets.REDIS_PASSWORD }}@redis:6379/0"
+            echo "REDIS_URL=redis://:${REDIS_PASSWORD_ENCODED}@redis:6379/0"
+            echo "REDIS_HOST=redis"
+            echo "REDIS_PORT=6379"
+            echo "REDIS_DB=0"
             echo ""
             echo "# API Configuration"
             echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}"
