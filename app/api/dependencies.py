@@ -9,7 +9,7 @@ from sqlalchemy.future import select
 from app.core.cache import rate_limit_check
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.models import ApiKey
+from app.models.api_key import ApiKey
 
 logger = logging.getLogger(__name__)
 

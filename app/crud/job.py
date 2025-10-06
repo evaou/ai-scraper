@@ -36,7 +36,7 @@ class JobCRUD:
             scheduled_at=scheduled_at,
             api_key_id=api_key_id,
             max_retries=max_retries,
-            metadata=metadata or {},
+            job_metadata=metadata or {},
         )
         db.add(job)
         await db.commit()
