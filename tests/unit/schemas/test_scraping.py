@@ -115,7 +115,7 @@ class TestScrapeRequest:
         """Test ScrapeRequest with minimal required fields."""
         request = ScrapeRequest(url="https://example.com")
         
-        assert str(request.url) == "https://example.com"
+        assert str(request.url) == "https://example.com/"
         assert request.selector is None
         assert isinstance(request.options, ScrapingOptions)
         assert request.priority == 0

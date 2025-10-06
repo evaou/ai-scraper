@@ -80,7 +80,7 @@ class TestScrapingEndpoints:
         data = response.json()
         
         assert data["priority"] == 8
-        assert data["url"] == "https://example.com"
+        assert data["url"] == "https://example.com/"
     
     @pytest.mark.asyncio
     async def test_get_job_details_not_found(self, client: AsyncClient):

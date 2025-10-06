@@ -25,6 +25,24 @@ class Job(Base):
     """Model for scraping jobs."""
 
     __tablename__ = "jobs"
+    
+    def __init__(self, **kwargs):
+        """Initialize Job with proper defaults."""
+        # Set default values if not provided
+        if 'status' not in kwargs:
+            kwargs['status'] = JobStatus.PENDING
+        if 'retry_count' not in kwargs:
+            kwargs['retry_count'] = 0
+        if 'max_retries' not in kwargs:
+            kwargs['max_retries'] = 3
+        if 'priority' not in kwargs:
+            kwargs['priority'] = 0
+        if 'options' not in kwargs:
+            kwargs['options'] = {}
+        if 'job_metadata' not in kwargs:
+            kwargs['job_metadata'] = {}
+        
+        super().__init__(**kwargs)
 
     # Primary key
     id = Column(UUIDType(), primary_key=True, default=uuid4, index=True)
@@ -68,7 +86,8 @@ class Job(Base):
 
     def __repr__(self) -> str:
         """String representation of the job."""
-        return f"<Job(id={self.id}, url={self.url[:50]}..., status={self.status.value})>"
+        status_value = self.status.value if self.status else 'unknown'
+        return f"<Job(id={self.id}, url={self.url[:50]}..., status={status_value})>"
 
     @property
     def execution_time(self) -> float | None:
@@ -97,14 +116,14 @@ class Job(Base):
             "url": self.url,
             "selector": self.selector,
             "options": self.options or {},
-            "status": self.status.value,
+            "status": self.status.value if self.status else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error_message": self.error_message,
-            "retry_count": self.retry_count,
-            "max_retries": self.max_retries,
-            "priority": self.priority,
+            "retry_count": self.retry_count if self.retry_count is not None else 0,
+            "max_retries": self.max_retries if self.max_retries is not None else 3,
+            "priority": self.priority if self.priority is not None else 0,
             "scheduled_at": self.scheduled_at.isoformat() if self.scheduled_at else None,
             "execution_time": self.execution_time,
             "metadata": self.job_metadata or {},

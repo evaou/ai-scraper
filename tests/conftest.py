@@ -44,16 +44,7 @@ def test_settings() -> Settings:
     )
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for testing."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    yield loop
-    loop.close()
-
-
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def test_engine(test_settings):
     """Create test database engine."""
     # Use database URL from settings (PostgreSQL in CI, SQLite locally)
@@ -73,7 +64,7 @@ async def test_engine(test_settings):
             pass
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture(scope="function")
 async def setup_test_db(test_engine):
     """Set up test database with all tables."""
     async with test_engine.begin() as conn:
@@ -116,7 +107,7 @@ def mock_redis():
     """Mock Redis client for testing."""
     mock_redis = MagicMock(spec=Redis)
     
-    # Mock all Redis methods as async
+    # Mock all Redis methods as async with proper return values
     mock_redis.ping = AsyncMock(return_value=True)
     mock_redis.get = AsyncMock(return_value=None)
     mock_redis.set = AsyncMock(return_value=True)
@@ -135,6 +126,12 @@ def mock_redis():
     mock_redis.zremrangebyscore = AsyncMock(return_value=0)
     mock_redis.zrange = AsyncMock(return_value=[])
     mock_redis.close = AsyncMock()
+    mock_redis.info = AsyncMock(return_value={
+        "redis_version": "6.0.0",
+        "connected_clients": 1,
+        "used_memory": 1024,
+        "used_memory_human": "1K"
+    })
     
     return mock_redis
 
@@ -169,12 +166,30 @@ async def client(db_session, redis_client, monkeypatch) -> AsyncGenerator[AsyncC
         
     async def mock_get_redis():
         return redis_client
+        
+    # Mock RedisQueue to avoid event loop conflicts
+    class MockRedisQueue:
+        def __init__(self, redis_client):
+            self.redis = redis_client
+            
+        async def enqueue(self, job_id: str, priority: int = 0) -> bool:
+            return True
+            
+        async def dequeue(self, timeout: int = 10) -> str | None:
+            return None
+            
+        async def complete_job(self, job_id: str) -> bool:
+            return True
     
     # Patch all Redis-related functions
     monkeypatch.setattr("app.core.cache.rate_limit_check", mock_rate_limit_check)
     monkeypatch.setattr("app.core.redis.init_redis", mock_init_redis)
     monkeypatch.setattr("app.core.redis.get_redis", mock_get_redis)
     monkeypatch.setattr("app.core.cache.get_redis_client", mock_get_redis_client)
+    monkeypatch.setattr("app.core.redis.RedisQueue", MockRedisQueue)
+    
+    # Also patch the route-level imports to avoid import-time event loop issues
+    monkeypatch.setattr("app.api.routes.scraping.get_redis", mock_get_redis)
     
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_redis] = override_get_redis
