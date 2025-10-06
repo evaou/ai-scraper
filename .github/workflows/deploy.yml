@@ -187,13 +187,26 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && secrets.LINODE_HOST != ''
+    if: github.ref == 'refs/heads/main'
+    environment: production
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+    
+    - name: Check deployment secrets
+      id: check-secrets
+      run: |
+        if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+          echo "deployment-ready=false" >> $GITHUB_OUTPUT
+          echo "⚠️ Deployment secrets not configured - skipping deployment"
+        else
+          echo "deployment-ready=true" >> $GITHUB_OUTPUT
+          echo "✅ Deployment secrets configured - proceeding with deployment"
+        fi
 
     - name: Create deployment files
+      if: steps.check-secrets.outputs.deployment-ready == 'true'
       run: |
         # Create environment file for production
         cat > .env.prod << EOF
@@ -217,6 +230,7 @@ jobs:
         EOF
 
     - name: Copy files to server
+      if: steps.check-secrets.outputs.deployment-ready == 'true'
       uses: appleboy/scp-action@v0.1.7
       with:
         host: ${{ secrets.LINODE_HOST }}
@@ -228,6 +242,7 @@ jobs:
         strip_components: 0
 
     - name: Deploy to server
+      if: steps.check-secrets.outputs.deployment-ready == 'true'
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.LINODE_HOST }}
@@ -277,13 +292,40 @@ jobs:
             echo "❌ Health check failed!"
             exit 1
           fi
+    
+    - name: Deployment skipped message
+      if: steps.check-secrets.outputs.deployment-ready == 'false'
+      run: |
+        echo "⏭️ Deployment skipped - server secrets not configured"
+        echo ""
+        echo "To enable deployment, configure the following secrets in GitHub:"
+        echo "  • LINODE_HOST - Your deployment server IP/hostname"
+        echo "  • LINODE_USER - SSH username for your server"
+        echo "  • SSH_PRIVATE_KEY - SSH private key content"
+        echo "  • POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD - Database credentials"
+        echo "  • REDIS_PASSWORD - Redis password"
+        echo "  • JWT_SECRET_KEY - JWT signing secret"
+        echo ""
+        echo "✅ Build and push completed successfully!"
 
   rollback:
     needs: [deploy]
     runs-on: ubuntu-latest
-    if: failure() && github.ref == 'refs/heads/main' && secrets.LINODE_HOST != ''
+    if: failure() && github.ref == 'refs/heads/main'
     steps:
+    - name: Check rollback secrets
+      id: check-rollback-secrets
+      run: |
+        if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+          echo "rollback-ready=false" >> $GITHUB_OUTPUT
+          echo "⚠️ Rollback secrets not configured - skipping rollback"
+        else
+          echo "rollback-ready=true" >> $GITHUB_OUTPUT
+          echo "✅ Rollback secrets configured - proceeding with rollback"
+        fi
+    
     - name: Rollback on deployment failure
+      if: steps.check-rollback-secrets.outputs.rollback-ready == 'true'
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.LINODE_HOST }}
@@ -316,27 +358,8 @@ jobs:
             echo "⚠️ No backup found for rollback"
           fi
 
-  deployment-skipped:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && secrets.LINODE_HOST == ''
-    steps:
-    - name: Deployment skipped
-      run: |
-        echo "⏭️ Deployment skipped - server secrets not configured"
-        echo ""
-        echo "To enable deployment, configure the following secrets in GitHub:"
-        echo "  • LINODE_HOST - Your deployment server IP/hostname"
-        echo "  • LINODE_USER - SSH username for your server"
-        echo "  • SSH_PRIVATE_KEY - SSH private key content"
-        echo "  • POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD - Database credentials"
-        echo "  • REDIS_PASSWORD - Redis password"
-        echo "  • JWT_SECRET_KEY - JWT signing secret"
-        echo ""
-        echo "✅ Build and push completed successfully!"
-
   notify:
-    needs: [deploy, rollback, deployment-skipped]
+    needs: [deploy, rollback]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -346,7 +369,7 @@ jobs:
           echo "✅ Deployment to Linode successful!"
         elif [ "${{ needs.rollback.result }}" == "success" ]; then
           echo "🔄 Deployment failed but rollback successful"
-        elif [ "${{ needs.deployment-skipped.result }}" == "success" ]; then
+        elif [ "${{ needs.deploy.result }}" == "skipped" ]; then
           echo "⏭️ Build successful, deployment skipped (secrets not configured)"
         else
           echo "❌ Workflow completed with issues"
