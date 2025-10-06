@@ -263,7 +263,7 @@ class TestGetSettings:
         settings = Settings()
         
         # Check that Field descriptions are accessible through model fields
-        fields = settings.__class__.__fields__
+        fields = settings.__class__.model_fields
         
         # Some key fields should have descriptions
         assert 'description' in str(fields['PROJECT_NAME'])
