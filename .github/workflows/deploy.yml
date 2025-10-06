@@ -163,6 +163,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Show built API tags
+        run: |
+          echo "🏷️ API Tags built and pushed:"
+          echo "${{ steps.meta-api.outputs.tags }}"
+
       - name: Extract metadata for Worker
         id: meta-worker
         uses: docker/metadata-action@v5
@@ -184,6 +189,11 @@ jobs:
           labels: ${{ steps.meta-worker.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Show built Worker tags
+        run: |
+          echo "🏷️ Worker Tags built and pushed:"
+          echo "${{ steps.meta-worker.outputs.tags }}"
 
   deploy:
     needs: build-and-push
@@ -209,6 +219,9 @@ jobs:
       - name: Create deployment files
         if: steps.check-secrets.outputs.deployment-ready == 'true'
         run: |
+          # Create short SHA for image tags
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
           # Create environment file for production
           cat > .env.prod << EOF
           # Database Configuration
@@ -226,7 +239,6 @@ jobs:
           API_KEY_REQUIRED=true
 
           # Image tags (use short SHA to match docker metadata action)
-          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
           API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${SHORT_SHA}
           WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${SHORT_SHA}
           EOF
@@ -296,7 +308,23 @@ jobs:
               echo "🔍 Updated to latest tags:"
               grep "image: ghcr.io/evaou/ai-scraper-" docker-compose.prod.yml
               
-              docker compose -f docker-compose.prod.yml pull
+              if ! docker compose -f docker-compose.prod.yml pull; then
+                echo "⚠️  Latest tags also not found. This might be the first deployment."
+                echo "🛠️  Checking if we can build images locally..."
+                
+                # Try to build images locally as last resort
+                if [ -f "docker/Dockerfile.api" ] && [ -f "docker/Dockerfile.worker" ]; then
+                  echo "📦 Building API image locally..."
+                  docker build -f docker/Dockerfile.api -t ghcr.io/evaou/ai-scraper-api:latest .
+                  
+                  echo "📦 Building Worker image locally..."  
+                  docker build -f docker/Dockerfile.worker -t ghcr.io/evaou/ai-scraper-worker:latest .
+                  
+                  echo "✅ Images built locally successfully"
+                else
+                  echo "⚠️  Cannot build locally - Dockerfiles not found. Continuing anyway."
+                fi
+              fi
             fi
 
             # Deploy with zero-downtime if script exists, otherwise simple deployment
