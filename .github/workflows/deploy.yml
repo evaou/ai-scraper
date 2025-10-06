@@ -7,8 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_API: ${{ github.repository }}-api
-  IMAGE_NAME_WORKER: ${{ github.repository }}-worker
+  IMAGE_NAME_API: evaou/ai-scraper-api
+  IMAGE_NAME_WORKER: evaou/ai-scraper-worker
 
 jobs:
   test:
@@ -225,9 +225,10 @@ jobs:
           JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
           API_KEY_REQUIRED=true
 
-          # Image tags
-          API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${{ github.sha }}
-          WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${{ github.sha }}
+          # Image tags (use short SHA to match docker metadata action)
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${SHORT_SHA}
+          WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${SHORT_SHA}
           EOF
 
       - name: Copy files to server
@@ -263,12 +264,40 @@ jobs:
             # Create necessary directories
             mkdir -p ./secrets ./logs ./data/postgres ./data/redis
 
-            # Update docker-compose.prod.yml with new image tags
-            sed -i "s|image: .*api.*|image: ${API_IMAGE_TAG}|g" docker-compose.prod.yml
-            sed -i "s|image: .*worker.*|image: ${WORKER_IMAGE_TAG}|g" docker-compose.prod.yml
+            # Debug: Show what image tags we're trying to use
+            echo "🐳 Deploying with images:"
+            echo "  API: ${API_IMAGE_TAG}"
+            echo "  Worker: ${WORKER_IMAGE_TAG}"
 
-            # Pull new images
-            docker compose -f docker-compose.prod.yml pull
+            # Update docker-compose.prod.yml with new image tags
+            sed -i "s|image: ghcr.io/evaou/ai-scraper-api:.*|image: ${API_IMAGE_TAG}|g" docker-compose.prod.yml
+            sed -i "s|image: ghcr.io/evaou/ai-scraper-worker:.*|image: ${WORKER_IMAGE_TAG}|g" docker-compose.prod.yml
+
+            # Debug: Show what was actually updated
+            echo "🔍 Updated docker-compose.prod.yml images:"
+            grep "image: ghcr.io/evaou/ai-scraper-" docker-compose.prod.yml
+
+            # Pull new images with fallback to latest if specific tag fails
+            echo "📥 Attempting to pull images..."
+            if ! docker compose -f docker-compose.prod.yml pull; then
+              echo "⚠️  Failed to pull images with specific tags, checking what's available..."
+              
+              # Check what tags exist for debugging
+              echo "🔍 Available tags for API:"
+              docker manifest ls ${API_IMAGE_TAG} 2>/dev/null || echo "Tag not found: ${API_IMAGE_TAG}"
+              
+              echo "🔍 Trying to fallback to latest tags..."
+              # Fallback to latest tags
+              API_IMAGE_LATEST=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:latest
+              WORKER_IMAGE_LATEST=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:latest
+              sed -i "s|image: ghcr.io/evaou/ai-scraper-api:.*|image: ${API_IMAGE_LATEST}|g" docker-compose.prod.yml
+              sed -i "s|image: ghcr.io/evaou/ai-scraper-worker:.*|image: ${WORKER_IMAGE_LATEST}|g" docker-compose.prod.yml
+              
+              echo "🔍 Updated to latest tags:"
+              grep "image: ghcr.io/evaou/ai-scraper-" docker-compose.prod.yml
+              
+              docker compose -f docker-compose.prod.yml pull
+            fi
 
             # Deploy with zero-downtime if script exists, otherwise simple deployment
             if [ -f "./scripts/deploy.sh" ]; then
