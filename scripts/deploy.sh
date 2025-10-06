@@ -4,9 +4,7 @@ set -e
 
 echo "🚀 Starting deployment..."
 
-# Col        echo "Restoring previous configuration..."
-        cp .env.prod.backup .env.prod
-        load_env ".env.prod" for output
+# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -23,12 +21,35 @@ load_env() {
             [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
             # Remove inline comments and export
             clean_line=$(echo "$line" | sed 's/#.*//' | sed 's/[[:space:]]*$//')
-            [[ -n "$clean_line" ]] && export "$clean_line"
+            if [[ -n "$clean_line" ]]; then
+                if ! export "$clean_line" 2>/dev/null; then
+                    echo "Warning: Failed to export: $clean_line"
+                fi
+            fi
         done < "$env_file"
+        echo "Environment variables loaded successfully"
+    else
+        echo "Warning: Environment file $env_file not found"
     fi
 }
 
-# Load environment variables
+# Backup current configuration early to avoid rollback issues
+echo "📦 Backing up current configuration..."
+if [ -f ".env.prod" ]; then
+    cp .env.prod .env.prod.backup
+    echo "Backed up .env.prod"
+else
+    echo "No previous .env.prod to backup (first deployment)"
+fi
+
+if [ -f "docker-compose.prod.yml" ]; then
+    cp docker-compose.prod.yml docker-compose.prod.yml.backup
+    echo "Backed up docker-compose.prod.yml"
+else
+    echo "No previous docker-compose.prod.yml to backup"
+fi
+
+# Load environment variables (after backup, in case file was just created by CI)
 load_env ".env.prod"
 
 # Function to check if service is healthy
@@ -62,7 +83,7 @@ rollback() {
     if [ -f ".env.prod.backup" ]; then
         echo "Restoring previous configuration..."
         cp .env.prod.backup .env.prod
-        export $(cat .env.prod | grep -v '^#' | grep -v '^\s*$' | sed 's/#.*//' | xargs)
+        load_env ".env.prod"
         
         # Restore docker compose file if backed up
         if [ -f "docker-compose.prod.yml.backup" ]; then
@@ -80,18 +101,16 @@ rollback() {
             exit 1
         fi
     else
-        echo -e "${RED}❌ No backup found for rollback${NC}"
+        echo -e "${YELLOW}⚠️  No backup found for rollback - this might be the first deployment${NC}"
+        echo "Attempting to stop any running services..."
+        docker compose -f docker-compose.prod.yml down 2>/dev/null || echo "No services to stop"
+        echo -e "${YELLOW}⚠️  Rollback completed without restore${NC}"
         exit 1
     fi
 }
 
 # Trap to handle failures
 trap rollback ERR
-
-# Backup current configuration
-echo "📦 Backing up current configuration..."
-cp .env.prod .env.prod.backup 2>/dev/null || echo "No previous .env.prod to backup"
-cp docker-compose.prod.yml docker-compose.prod.yml.backup 2>/dev/null || echo "No previous compose file to backup"
 
 # Check if required environment variables are set
 required_vars=("API_IMAGE_TAG" "WORKER_IMAGE_TAG" "POSTGRES_PASSWORD" "REDIS_PASSWORD")
