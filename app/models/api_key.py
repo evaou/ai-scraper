@@ -6,10 +6,10 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.database_types import UUIDType
 
 
 class ApiKey(Base):
@@ -18,7 +18,7 @@ class ApiKey(Base):
     __tablename__ = "api_keys"
 
     # Primary key
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    id = Column(UUIDType(), primary_key=True, default=uuid4, index=True)
 
     # API key details
     key_hash = Column(String(128), unique=True, nullable=False, index=True)

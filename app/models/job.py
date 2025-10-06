@@ -4,12 +4,11 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, Enum, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.database_types import JSONType, UUIDType
 
 
 class JobStatus(enum.Enum):
@@ -28,12 +27,12 @@ class Job(Base):
     __tablename__ = "jobs"
 
     # Primary key
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    id = Column(UUIDType(), primary_key=True, default=uuid4, index=True)
 
     # Job details
     url = Column(String(2048), nullable=False, index=True)
     selector = Column(String(500), nullable=True)
-    options = Column(JSONB, nullable=True, default=dict)
+    options = Column(JSONType(), nullable=True, default=dict)
 
     # Status and timing
     status = Column(Enum(JobStatus), nullable=False, default=JobStatus.PENDING, index=True)
@@ -51,10 +50,10 @@ class Job(Base):
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
 
     # API key for authentication (if required)
-    api_key_id = Column(PG_UUID(as_uuid=True), nullable=True)
+    api_key_id = Column(UUIDType(), nullable=True)
 
     # Metadata
-    job_metadata = Column(JSONB, nullable=True, default=dict)
+    job_metadata = Column(JSONType(), nullable=True, default=dict)
 
     # Additional indexes for query optimization
     __table_args__ = (

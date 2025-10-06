@@ -3,12 +3,11 @@ from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.database_types import JSONType, UUIDType
 
 
 class Result(Base):
@@ -17,13 +16,13 @@ class Result(Base):
     __tablename__ = "results"
 
     # Primary key
-    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
+    id = Column(UUIDType(), primary_key=True, default=uuid4, index=True)
 
     # Foreign key to job
-    job_id = Column(PG_UUID(as_uuid=True), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
+    job_id = Column(UUIDType(), ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    # Scraped data (using JSONB for better performance)
-    data = Column(JSONB, nullable=False, default=dict)
+    # Scraped data (using JSON/JSONB for better performance)
+    data = Column(JSONType(), nullable=False, default=dict)
 
     # Content metadata
     content_type = Column(String(100), nullable=True)
@@ -36,27 +35,27 @@ class Result(Base):
 
     # HTTP response details
     status_code = Column(Integer, nullable=True)
-    response_headers = Column(JSONB, nullable=True, default=dict)
+    response_headers = Column(JSONType(), nullable=True, default=dict)
 
     # Timing information
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     response_time = Column(Integer, nullable=True)  # Response time in milliseconds
 
     # Additional metadata
-    result_metadata = Column(JSONB, nullable=True, default=dict)
+    result_metadata = Column(JSONType(), nullable=True, default=dict)
 
     # Text content for search/indexing
     text_content = Column(Text, nullable=True)
 
     # Links extracted from page
-    links = Column(JSONB, nullable=True, default=list)
+    links = Column(JSONType(), nullable=True, default=list)
 
     # Performance metrics
     page_load_time = Column(Integer, nullable=True)  # Page load time in milliseconds
     dom_ready_time = Column(Integer, nullable=True)  # DOM ready time in milliseconds
 
     # Browser info
-    browser_info = Column(JSONB, nullable=True, default=dict)
+    browser_info = Column(JSONType(), nullable=True, default=dict)
 
     # Additional indexes for performance
     __table_args__ = (
