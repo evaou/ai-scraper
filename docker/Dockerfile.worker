@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-freefont-ttf \
     && rm -rf /var/lib/apt/lists/* \
-    && playwright install chromium
+    && playwright install --with-deps chromium
 
 # Copy project
 COPY app/ ./app/

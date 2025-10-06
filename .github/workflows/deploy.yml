@@ -42,21 +42,63 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: 'requirements*.txt'
+        
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client redis-tools
         
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -e ".[test]"
+        
+    - name: Install Playwright browsers
+      run: |
+        playwright install --with-deps chromium
+        
+    - name: Wait for services to be ready
+      run: |
+        # Wait for PostgreSQL
+        for i in {1..30}; do
+          if pg_isready -h localhost -p 5432 -U postgres; then
+            echo "PostgreSQL is ready"
+            break
+          fi
+          echo "Waiting for PostgreSQL... ($i/30)"
+          sleep 2
+        done
+        
+        # Wait for Redis
+        for i in {1..30}; do
+          if redis-cli -h localhost -p 6379 ping; then
+            echo "Redis is ready"
+            break
+          fi
+          echo "Waiting for Redis... ($i/30)"
+          sleep 2
+        done
         
     - name: Run tests
       env:
         DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/test_scraper
         REDIS_URL: redis://localhost:6379/0
+        PYTHONPATH: .
       run: |
-        pytest tests/ -v --tb=short
+        pytest tests/ -v --tb=short --maxfail=5
 
   build-and-push:
     needs: test
@@ -151,8 +193,8 @@ jobs:
         API_KEY_REQUIRED=true
         
         # Image tags
-        API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:main-${{ github.sha }}
-        WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:main-${{ github.sha }}
+        API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${{ github.sha }}
+        WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${{ github.sha }}
         EOF
 
     - name: Copy files to server
@@ -178,7 +220,7 @@ jobs:
           cd /opt/ai-scraper
           
           # Log in to GitHub Container Registry
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           
           # Load environment variables
           export $(cat .env.prod | xargs)
@@ -208,7 +250,7 @@ jobs:
           sleep 30
           
           # Basic health check
-          if curl -f http://localhost/health || curl -f http://localhost:8000/api/v1/health/live; then
+          if curl -f http://localhost/api/v1/health/live || curl -f http://localhost:8000/api/v1/health/live; then
             echo "✅ Deployment successful!"
             # Clean up old images
             docker image prune -f
@@ -217,8 +259,46 @@ jobs:
             exit 1
           fi
 
-  notify:
+  rollback:
     needs: [deploy]
+    runs-on: ubuntu-latest
+    if: failure() && github.ref == 'refs/heads/main'
+    steps:
+    - name: Rollback on deployment failure
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.LINODE_HOST }}
+        username: ${{ secrets.LINODE_USER }}
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        port: 22
+        script: |
+          set -e
+          cd /opt/ai-scraper
+          
+          echo "🔄 Attempting rollback..."
+          
+          # Restore previous configuration if backup exists
+          if [ -f ".env.prod.backup" ]; then
+            cp .env.prod.backup .env.prod
+            echo "✅ Configuration restored"
+            
+            # Deploy previous version
+            docker compose -f docker-compose.prod.yml up -d
+            
+            # Wait for health check
+            sleep 30
+            if curl -f http://localhost/api/v1/health/live; then
+              echo "✅ Rollback successful"
+            else
+              echo "❌ Rollback failed"
+              exit 1
+            fi
+          else
+            echo "⚠️ No backup found for rollback"
+          fi
+
+  notify:
+    needs: [deploy, rollback]
     runs-on: ubuntu-latest
     if: always()
     steps:
@@ -226,6 +306,8 @@ jobs:
       run: |
         if [ "${{ needs.deploy.result }}" == "success" ]; then
           echo "✅ Deployment to Linode successful!"
+        elif [ "${{ needs.rollback.result }}" == "success" ]; then
+          echo "🔄 Deployment failed but rollback successful"
         else
           echo "❌ Deployment failed!"
         fi
