@@ -224,24 +224,24 @@ jobs:
 
           # Create environment file for production
           cat > .env.prod << EOF
-          # Database Configuration
-          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
+# Database Configuration
+POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
 
-          # Redis Configuration
-          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-          REDIS_URL=redis://:${{ secrets.REDIS_PASSWORD }}@redis:6379/0
+# Redis Configuration  
+REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+REDIS_URL=redis://:${{ secrets.REDIS_PASSWORD }}@redis:6379/0
 
-          # API Configuration
-          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-          API_KEY_REQUIRED=true
+# API Configuration
+JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+API_KEY_REQUIRED=true
 
-          # Image tags (use short SHA to match docker metadata action)
-          API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${SHORT_SHA}
-          WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${SHORT_SHA}
-          EOF
+# Image tags (use short SHA to match docker metadata action)
+API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${SHORT_SHA}
+WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${SHORT_SHA}
+EOF
 
       - name: Copy files to server
         if: steps.check-secrets.outputs.deployment-ready == 'true'

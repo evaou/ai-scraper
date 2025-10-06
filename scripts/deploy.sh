@@ -52,6 +52,13 @@ fi
 # Load environment variables (after backup, in case file was just created by CI)
 load_env ".env.prod"
 
+# Debug: Show that critical environment variables are loaded
+echo "🔍 Verifying environment variables..."
+echo "POSTGRES_USER: ${POSTGRES_USER:-NOT_SET}"
+echo "POSTGRES_DB: ${POSTGRES_DB:-NOT_SET}"
+echo "DATABASE_URL: ${DATABASE_URL:0:50}... (truncated for security)"
+echo "REDIS_URL: ${REDIS_URL:0:30}... (truncated for security)"
+
 # Function to check if service is healthy
 check_health() {
     local service=$1
@@ -152,12 +159,15 @@ if ! check_health "redis"; then
     exit 1
 fi
 
-# Run database migrations if needed
-echo "🔄 Running database migrations..."
-docker compose -f docker-compose.prod.yml exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT 1;" > /dev/null || {
+# Test database connection
+echo "🔄 Testing database connection..."
+if ! docker compose -f docker-compose.prod.yml exec -T db pg_isready -h localhost -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
     echo -e "${RED}❌ Database connection failed${NC}"
+    echo "Checking database logs..."
+    docker compose -f docker-compose.prod.yml logs db --tail=20
     exit 1
-}
+fi
+echo -e "${GREEN}✅ Database connection successful${NC}"
 
 # Start application services
 echo "🚀 Starting application services..."

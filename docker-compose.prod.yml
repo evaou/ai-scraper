@@ -16,7 +16,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-scraper_user} -d ${POSTGRES_DB:-scraper_prod}",
+          "pg_isready -h localhost -U ${POSTGRES_USER:-scraper_user} -d ${POSTGRES_DB:-scraper_prod}",
         ]
       interval: 30s
       timeout: 10s
