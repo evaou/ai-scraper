@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 from typing import AsyncGenerator, Dict, Any
 from unittest.mock import Mock, AsyncMock, MagicMock
+from fastapi.testclient import TestClient
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -121,6 +122,7 @@ async def redis_client(mock_redis):
 @pytest_asyncio.fixture
 async def client(db_session, redis_client) -> AsyncGenerator[AsyncClient, None]:
     """Get HTTP client with dependency overrides for testing."""
+    from httpx import ASGITransport
     
     def override_get_db():
         return db_session
@@ -131,7 +133,9 @@ async def client(db_session, redis_client) -> AsyncGenerator[AsyncClient, None]:
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_redis] = override_get_redis
     
-    async with AsyncClient(app=app, base_url="http://testserver") as ac:
+    # Use ASGI transport to properly test FastAPI app
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
         yield ac
     
     # Clean up overrides
