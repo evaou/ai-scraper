@@ -274,7 +274,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
 # Include routers
 app.include_router(
     scraping.router,
-    prefix=f"{settings.API_V1_STR}/scraping",
+    prefix=settings.API_V1_STR,
     tags=["scraping"],
 )
 
