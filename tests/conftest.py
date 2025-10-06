@@ -28,9 +28,13 @@ fake = Faker()
 @pytest.fixture(scope="session")
 def test_settings() -> Settings:
     """Override settings for testing."""
+    # Use PostgreSQL from environment if available, otherwise fall back to SQLite for local testing
+    database_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///test.db")
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6380/15")
+    
     return Settings(
-        DATABASE_URL="sqlite+aiosqlite:///test.db",
-        REDIS_URL="redis://localhost:6380/15",  # Use test DB
+        DATABASE_URL=database_url,
+        REDIS_URL=redis_url,
         DEBUG=True,
         LOG_LEVEL="DEBUG",
         API_KEY_REQUIRED=False,
@@ -49,21 +53,23 @@ def event_loop():
 
 
 @pytest.fixture(scope="session")
-async def test_engine():
+async def test_engine(test_settings):
     """Create test database engine."""
-    # Use SQLite for fast testing
+    # Use database URL from settings (PostgreSQL in CI, SQLite locally)
     engine = create_async_engine(
-        "sqlite+aiosqlite:///test.db",
+        test_settings.DATABASE_URL,
         echo=False,
         future=True
     )
     yield engine
     await engine.dispose()
-    # Clean up test database
-    try:
-        os.unlink("test.db")
-    except FileNotFoundError:
-        pass
+    
+    # Clean up SQLite test database if using SQLite
+    if "sqlite" in test_settings.DATABASE_URL:
+        try:
+            os.unlink("test.db")
+        except FileNotFoundError:
+            pass
 
 
 @pytest_asyncio.fixture(scope="session")
