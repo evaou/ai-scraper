@@ -4,16 +4,32 @@ set -e
 
 echo "🚀 Starting deployment..."
 
-# Colors for output
+# Col        echo "Restoring previous configuration..."
+        cp .env.prod.backup .env.prod
+        load_env ".env.prod" for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Function to safely load environment variables
+load_env() {
+    local env_file=$1
+    if [ -f "$env_file" ]; then
+        echo "Loading environment variables from $env_file..."
+        # Remove comments, empty lines, and export safely
+        while IFS= read -r line; do
+            # Skip empty lines and comments
+            [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+            # Remove inline comments and export
+            clean_line=$(echo "$line" | sed 's/#.*//' | sed 's/[[:space:]]*$//')
+            [[ -n "$clean_line" ]] && export "$clean_line"
+        done < "$env_file"
+    fi
+}
+
 # Load environment variables
-if [ -f ".env.prod" ]; then
-    export $(cat .env.prod | grep -v '^#' | xargs)
-fi
+load_env ".env.prod"
 
 # Function to check if service is healthy
 check_health() {
@@ -46,7 +62,7 @@ rollback() {
     if [ -f ".env.prod.backup" ]; then
         echo "Restoring previous configuration..."
         cp .env.prod.backup .env.prod
-        export $(cat .env.prod | grep -v '^#' | xargs)
+        export $(cat .env.prod | grep -v '^#' | grep -v '^\s*$' | sed 's/#.*//' | xargs)
         
         # Restore docker compose file if backed up
         if [ -f "docker-compose.prod.yml.backup" ]; then

@@ -28,7 +28,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7-alpine
         options: >-
@@ -40,85 +40,85 @@ jobs:
           - 6379:6379
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.11'
-        cache: 'pip'
-        cache-dependency-path: 'requirements*.txt'
-        
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
-        
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y postgresql-client redis-tools
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[test]"
-        pip install -r requirements.txt
-        
-    - name: Install Playwright browsers
-      run: |
-        playwright install --with-deps chromium
-        
-    - name: Wait for services to be ready
-      run: |
-        # Wait for PostgreSQL
-        echo "Waiting for PostgreSQL to be ready..."
-        postgres_ready=false
-        for i in {1..30}; do
-          if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
-            echo "✅ PostgreSQL is ready"
-            postgres_ready=true
-            break
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: "requirements*.txt"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client redis-tools
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+          pip install -r requirements.txt
+
+      - name: Install Playwright browsers
+        run: |
+          playwright install --with-deps chromium
+
+      - name: Wait for services to be ready
+        run: |
+          # Wait for PostgreSQL
+          echo "Waiting for PostgreSQL to be ready..."
+          postgres_ready=false
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres > /dev/null 2>&1; then
+              echo "✅ PostgreSQL is ready"
+              postgres_ready=true
+              break
+            fi
+            echo "⏳ Waiting for PostgreSQL... ($i/30)"
+            sleep 2
+          done
+
+          if [ "$postgres_ready" != "true" ]; then
+            echo "❌ PostgreSQL failed to become ready after 60 seconds"
+            exit 1
           fi
-          echo "⏳ Waiting for PostgreSQL... ($i/30)"
-          sleep 2
-        done
-        
-        if [ "$postgres_ready" != "true" ]; then
-          echo "❌ PostgreSQL failed to become ready after 60 seconds"
-          exit 1
-        fi
-        
-        # Wait for Redis
-        echo "Waiting for Redis to be ready..."
-        redis_ready=false
-        for i in {1..30}; do
-          if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
-            echo "✅ Redis is ready"
-            redis_ready=true
-            break
+
+          # Wait for Redis
+          echo "Waiting for Redis to be ready..."
+          redis_ready=false
+          for i in {1..30}; do
+            if redis-cli -h localhost -p 6379 ping > /dev/null 2>&1; then
+              echo "✅ Redis is ready"
+              redis_ready=true
+              break
+            fi
+            echo "⏳ Waiting for Redis... ($i/30)"
+            sleep 2
+          done
+
+          if [ "$redis_ready" != "true" ]; then
+            echo "❌ Redis failed to become ready after 60 seconds"
+            exit 1
           fi
-          echo "⏳ Waiting for Redis... ($i/30)"
-          sleep 2
-        done
-        
-        if [ "$redis_ready" != "true" ]; then
-          echo "❌ Redis failed to become ready after 60 seconds"
-          exit 1
-        fi
-        
-        echo "🎉 All services are ready!"
-        
-    - name: Run tests
-      env:
-        DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/test_scraper
-        REDIS_URL: redis://localhost:6379/0
-        PYTHONPATH: .
-      run: |
-        pytest tests/ -v --tb=short --maxfail=5
+
+          echo "🎉 All services are ready!"
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/test_scraper
+          REDIS_URL: redis://localhost:6379/0
+          PYTHONPATH: .
+        run: |
+          pytest tests/ -v --tb=short --maxfail=5
 
   build-and-push:
     needs: test
@@ -128,62 +128,62 @@ jobs:
       packages: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Log in to Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Extract metadata for API
-      id: meta-api
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+      - name: Extract metadata for API
+        id: meta-api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push API image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./docker/Dockerfile.api
-        push: true
-        tags: ${{ steps.meta-api.outputs.tags }}
-        labels: ${{ steps.meta-api.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.api
+          push: true
+          tags: ${{ steps.meta-api.outputs.tags }}
+          labels: ${{ steps.meta-api.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-    - name: Extract metadata for Worker
-      id: meta-worker
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
+      - name: Extract metadata for Worker
+        id: meta-worker
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
 
-    - name: Build and push Worker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        file: ./docker/Dockerfile.worker
-        push: true
-        tags: ${{ steps.meta-worker.outputs.tags }}
-        labels: ${{ steps.meta-worker.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+      - name: Build and push Worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile.worker
+          push: true
+          tags: ${{ steps.meta-worker.outputs.tags }}
+          labels: ${{ steps.meta-worker.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     needs: build-and-push
@@ -192,186 +192,186 @@ jobs:
     environment: production
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Check deployment secrets
-      id: check-secrets
-      run: |
-        if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
-          echo "deployment-ready=false" >> $GITHUB_OUTPUT
-          echo "⚠️ Deployment secrets not configured - skipping deployment"
-        else
-          echo "deployment-ready=true" >> $GITHUB_OUTPUT
-          echo "✅ Deployment secrets configured - proceeding with deployment"
-        fi
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Create deployment files
-      if: steps.check-secrets.outputs.deployment-ready == 'true'
-      run: |
-        # Create environment file for production
-        cat > .env.prod << EOF
-        # Database Configuration
-        POSTGRES_DB=${{ secrets.POSTGRES_DB }}
-        POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-        POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-        DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
-        
-        # Redis Configuration
-        REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-        REDIS_URL=redis://:${{ secrets.REDIS_PASSWORD }}@redis:6379/0
-        
-        # API Configuration
-        JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
-        API_KEY_REQUIRED=true
-        
-        # Image tags
-        API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${{ github.sha }}
-        WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${{ github.sha }}
-        EOF
-
-    - name: Copy files to server
-      if: steps.check-secrets.outputs.deployment-ready == 'true'
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        host: ${{ secrets.LINODE_HOST }}
-        username: ${{ secrets.LINODE_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        source: "docker-compose.prod.yml,.env.prod,docker/,scripts/"
-        target: "/opt/ai-scraper/"
-        strip_components: 0
-
-    - name: Deploy to server
-      if: steps.check-secrets.outputs.deployment-ready == 'true'
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.LINODE_HOST }}
-        username: ${{ secrets.LINODE_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          set -e
-          cd /opt/ai-scraper
-          
-          # Log in to GitHub Container Registry
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          
-          # Load environment variables
-          export $(cat .env.prod | xargs)
-          
-          # Create necessary directories
-          mkdir -p ./secrets ./logs ./data/postgres ./data/redis
-          
-          # Update docker-compose.prod.yml with new image tags
-          sed -i "s|image: .*api.*|image: ${API_IMAGE_TAG}|g" docker-compose.prod.yml
-          sed -i "s|image: .*worker.*|image: ${WORKER_IMAGE_TAG}|g" docker-compose.prod.yml
-          
-          # Pull new images
-          docker compose -f docker-compose.prod.yml pull
-          
-          # Deploy with zero-downtime if script exists, otherwise simple deployment
-          if [ -f "./scripts/deploy.sh" ]; then
-            chmod +x ./scripts/deploy.sh
-            ./scripts/deploy.sh
+      - name: Check deployment secrets
+        id: check-secrets
+        run: |
+          if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+            echo "deployment-ready=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Deployment secrets not configured - skipping deployment"
           else
-            echo "Performing simple deployment..."
-            docker compose -f docker-compose.prod.yml down
-            docker compose -f docker-compose.prod.yml up -d
+            echo "deployment-ready=true" >> $GITHUB_OUTPUT
+            echo "✅ Deployment secrets configured - proceeding with deployment"
           fi
-          
-          # Health check
-          echo "Waiting for services to be healthy..."
-          sleep 30
-          
-          # Basic health check
-          if curl -f http://localhost/api/v1/health/live || curl -f http://localhost:8000/api/v1/health/live; then
-            echo "✅ Deployment successful!"
-            # Clean up old images
-            docker image prune -f
-          else
-            echo "❌ Health check failed!"
-            exit 1
-          fi
-    
-    - name: Deployment skipped message
-      if: steps.check-secrets.outputs.deployment-ready == 'false'
-      run: |
-        echo "⏭️ Deployment skipped - server secrets not configured"
-        echo ""
-        echo "To enable deployment, configure the following secrets in GitHub:"
-        echo "  • LINODE_HOST - Your deployment server IP/hostname"
-        echo "  • LINODE_USER - SSH username for your server"
-        echo "  • SSH_PRIVATE_KEY - SSH private key content"
-        echo "  • POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD - Database credentials"
-        echo "  • REDIS_PASSWORD - Redis password"
-        echo "  • JWT_SECRET_KEY - JWT signing secret"
-        echo ""
-        echo "✅ Build and push completed successfully!"
+
+      - name: Create deployment files
+        if: steps.check-secrets.outputs.deployment-ready == 'true'
+        run: |
+          # Create environment file for production
+          cat > .env.prod << EOF
+          # Database Configuration
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          DATABASE_URL=postgresql+asyncpg://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@db:5432/${{ secrets.POSTGRES_DB }}
+
+          # Redis Configuration
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          REDIS_URL=redis://:${{ secrets.REDIS_PASSWORD }}@redis:6379/0
+
+          # API Configuration
+          JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}
+          API_KEY_REQUIRED=true
+
+          # Image tags
+          API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${{ github.sha }}
+          WORKER_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:${{ github.ref_name }}-${{ github.sha }}
+          EOF
+
+      - name: Copy files to server
+        if: steps.check-secrets.outputs.deployment-ready == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.LINODE_HOST }}
+          username: ${{ secrets.LINODE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          source: "docker-compose.prod.yml,.env.prod,docker/,scripts/"
+          target: "/opt/ai-scraper/"
+          strip_components: 0
+
+      - name: Deploy to server
+        if: steps.check-secrets.outputs.deployment-ready == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LINODE_HOST }}
+          username: ${{ secrets.LINODE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /opt/ai-scraper
+
+            # Log in to GitHub Container Registry (suppress credential warning)
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin 2>/dev/null || echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Load environment variables
+            export $(cat .env.prod | grep -v '^#' | grep -v '^\s*$' | sed 's/#.*//' | xargs)
+
+            # Create necessary directories
+            mkdir -p ./secrets ./logs ./data/postgres ./data/redis
+
+            # Update docker-compose.prod.yml with new image tags
+            sed -i "s|image: .*api.*|image: ${API_IMAGE_TAG}|g" docker-compose.prod.yml
+            sed -i "s|image: .*worker.*|image: ${WORKER_IMAGE_TAG}|g" docker-compose.prod.yml
+
+            # Pull new images
+            docker compose -f docker-compose.prod.yml pull
+
+            # Deploy with zero-downtime if script exists, otherwise simple deployment
+            if [ -f "./scripts/deploy.sh" ]; then
+              chmod +x ./scripts/deploy.sh
+              ./scripts/deploy.sh
+            else
+              echo "Performing simple deployment..."
+              docker compose -f docker-compose.prod.yml down
+              docker compose -f docker-compose.prod.yml up -d
+            fi
+
+            # Health check
+            echo "Waiting for services to be healthy..."
+            sleep 30
+
+            # Basic health check
+            if curl -f http://localhost/api/v1/health/live || curl -f http://localhost:8000/api/v1/health/live; then
+              echo "✅ Deployment successful!"
+              # Clean up old images
+              docker image prune -f
+            else
+              echo "❌ Health check failed!"
+              exit 1
+            fi
+
+      - name: Deployment skipped message
+        if: steps.check-secrets.outputs.deployment-ready == 'false'
+        run: |
+          echo "⏭️ Deployment skipped - server secrets not configured"
+          echo ""
+          echo "To enable deployment, configure the following secrets in GitHub:"
+          echo "  • LINODE_HOST - Your deployment server IP/hostname"
+          echo "  • LINODE_USER - SSH username for your server"
+          echo "  • SSH_PRIVATE_KEY - SSH private key content"
+          echo "  • POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD - Database credentials"
+          echo "  • REDIS_PASSWORD - Redis password"
+          echo "  • JWT_SECRET_KEY - JWT signing secret"
+          echo ""
+          echo "✅ Build and push completed successfully!"
 
   rollback:
     needs: [deploy]
     runs-on: ubuntu-latest
     if: failure() && github.ref == 'refs/heads/main'
     steps:
-    - name: Check rollback secrets
-      id: check-rollback-secrets
-      run: |
-        if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
-          echo "rollback-ready=false" >> $GITHUB_OUTPUT
-          echo "⚠️ Rollback secrets not configured - skipping rollback"
-        else
-          echo "rollback-ready=true" >> $GITHUB_OUTPUT
-          echo "✅ Rollback secrets configured - proceeding with rollback"
-        fi
-    
-    - name: Rollback on deployment failure
-      if: steps.check-rollback-secrets.outputs.rollback-ready == 'true'
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.LINODE_HOST }}
-        username: ${{ secrets.LINODE_USER }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-        port: 22
-        script: |
-          set -e
-          cd /opt/ai-scraper
-          
-          echo "🔄 Attempting rollback..."
-          
-          # Restore previous configuration if backup exists
-          if [ -f ".env.prod.backup" ]; then
-            cp .env.prod.backup .env.prod
-            echo "✅ Configuration restored"
-            
-            # Deploy previous version
-            docker compose -f docker-compose.prod.yml up -d
-            
-            # Wait for health check
-            sleep 30
-            if curl -f http://localhost/api/v1/health/live; then
-              echo "✅ Rollback successful"
-            else
-              echo "❌ Rollback failed"
-              exit 1
-            fi
+      - name: Check rollback secrets
+        id: check-rollback-secrets
+        run: |
+          if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+            echo "rollback-ready=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Rollback secrets not configured - skipping rollback"
           else
-            echo "⚠️ No backup found for rollback"
+            echo "rollback-ready=true" >> $GITHUB_OUTPUT
+            echo "✅ Rollback secrets configured - proceeding with rollback"
           fi
+
+      - name: Rollback on deployment failure
+        if: steps.check-rollback-secrets.outputs.rollback-ready == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.LINODE_HOST }}
+          username: ${{ secrets.LINODE_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            cd /opt/ai-scraper
+
+            echo "🔄 Attempting rollback..."
+
+            # Restore previous configuration if backup exists
+            if [ -f ".env.prod.backup" ]; then
+              cp .env.prod.backup .env.prod
+              echo "✅ Configuration restored"
+              
+              # Deploy previous version
+              docker compose -f docker-compose.prod.yml up -d
+              
+              # Wait for health check
+              sleep 30
+              if curl -f http://localhost/api/v1/health/live; then
+                echo "✅ Rollback successful"
+              else
+                echo "❌ Rollback failed"
+                exit 1
+              fi
+            else
+              echo "⚠️ No backup found for rollback"
+            fi
 
   notify:
     needs: [deploy, rollback]
     runs-on: ubuntu-latest
     if: always()
     steps:
-    - name: Notify deployment status
-      run: |
-        if [ "${{ needs.deploy.result }}" == "success" ]; then
-          echo "✅ Deployment to Linode successful!"
-        elif [ "${{ needs.rollback.result }}" == "success" ]; then
-          echo "🔄 Deployment failed but rollback successful"
-        elif [ "${{ needs.deploy.result }}" == "skipped" ]; then
-          echo "⏭️ Build successful, deployment skipped (secrets not configured)"
-        else
-          echo "❌ Workflow completed with issues"
-        fi
+      - name: Notify deployment status
+        run: |
+          if [ "${{ needs.deploy.result }}" == "success" ]; then
+            echo "✅ Deployment to Linode successful!"
+          elif [ "${{ needs.rollback.result }}" == "success" ]; then
+            echo "🔄 Deployment failed but rollback successful"
+          elif [ "${{ needs.deploy.result }}" == "skipped" ]; then
+            echo "⏭️ Build successful, deployment skipped (secrets not configured)"
+          else
+            echo "❌ Workflow completed with issues"
+          fi
