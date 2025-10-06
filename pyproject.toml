@@ -334,3 +334,6 @@ exclude_lines = [
 exclude_dirs = ["tests", "migrations"]
 tests = ["B201", "B301"]
 skips = ["B101", "B601"]
+
+[tool.poetry.dependencies]
+aiosqlite = "*"

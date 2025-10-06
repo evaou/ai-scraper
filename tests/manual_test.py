@@ -12,7 +12,7 @@ import os
 # Add the parent directory to the path so we can import our modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.workers.scraper_worker import ScraperWorker
+from app.worker.scraper_worker import ScraperWorker
 from app.schemas.scraping import ScrapeRequest
 
 
