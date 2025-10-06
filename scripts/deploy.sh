@@ -188,17 +188,56 @@ if ! check_health "nginx"; then
     exit 1
 fi
 
-# Final health check
+# Final health check with retries
 echo "🏥 Performing final health check..."
-sleep 10
+echo "Waiting for application to fully initialize..."
+sleep 30
 
-# Check API health endpoint
-if curl -f -m 10 http://localhost/health > /dev/null 2>&1 || curl -f -m 10 http://localhost:8000/api/v1/health/live > /dev/null 2>&1; then
-    echo -e "${GREEN}✅ Application is healthy and responding${NC}"
-else
-    echo -e "${RED}❌ Application health check failed${NC}"
-    exit 1
-fi
+# Health check with retries
+max_health_attempts=10
+health_attempt=1
+
+echo "🔍 Testing health endpoints..."
+while [ $health_attempt -le $max_health_attempts ]; do
+    echo "Health check attempt $health_attempt/$max_health_attempts..."
+    
+    # Test nginx proxy health endpoint
+    if curl -f -m 10 http://localhost/health > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ Application is healthy and responding via nginx${NC}"
+        break
+    fi
+    
+    # Test direct API health endpoint as fallback
+    if curl -f -m 10 http://localhost:8000/api/v1/health/live > /dev/null 2>&1; then
+        echo -e "${GREEN}✅ Application is healthy and responding directly${NC}"
+        break
+    fi
+    
+    if [ $health_attempt -eq $max_health_attempts ]; then
+        echo -e "${RED}❌ Application health check failed after $max_health_attempts attempts${NC}"
+        echo "🔍 Debugging information:"
+        echo "Container status:"
+        docker compose -f docker-compose.prod.yml ps
+        echo ""
+        echo "API logs (last 30 lines):"
+        docker compose -f docker-compose.prod.yml logs api --tail=30
+        echo ""
+        echo "Nginx logs (last 15 lines):"
+        docker compose -f docker-compose.prod.yml logs nginx --tail=15
+        echo ""
+        echo "Network connectivity test:"
+        echo "Testing direct API connection:"
+        curl -v -m 5 http://localhost:8000/api/v1/health/live 2>&1 || echo "Direct API connection failed"
+        echo ""
+        echo "Testing nginx proxy:"
+        curl -v -m 5 http://localhost/health 2>&1 || echo "Nginx proxy connection failed"
+        exit 1
+    fi
+    
+    echo "Waiting 15 seconds before next attempt..."
+    sleep 15
+    health_attempt=$((health_attempt + 1))
+done
 
 # Start monitoring if enabled
 if docker compose -f docker-compose.prod.yml config --services | grep -q prometheus; then

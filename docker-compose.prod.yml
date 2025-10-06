@@ -72,6 +72,8 @@ services:
   # FastAPI Application
   api:
     image: ghcr.io/evaou/ai-scraper-api:latest
+    ports:
+      - "8000:8000" # Expose for health checks and debugging
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
