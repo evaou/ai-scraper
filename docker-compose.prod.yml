@@ -4,17 +4,20 @@ services:
     image: postgres:15-alpine
     container_name: scraper_db_prod
     environment:
-      - POSTGRES_DB=scraper_prod
-      - POSTGRES_USER=scraper_user
-      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - POSTGRES_DB=${POSTGRES_DB:-scraper_prod}
+      - POSTGRES_USER=${POSTGRES_USER:-scraper_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - PGDATA=/var/lib/postgresql/data/pgdata
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
       - ./docker/init-prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    secrets:
-      - postgres_password
+
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U scraper_user -d scraper_prod"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-scraper_user} -d ${POSTGRES_DB:-scraper_prod}",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,16 +73,14 @@ services:
   api:
     image: ghcr.io/evaou/ai-scraper-api:latest
     environment:
-      - DATABASE_URL_FILE=/run/secrets/database_url
-      - REDIS_URL_FILE=/run/secrets/redis_url
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - DEBUG=false
       - LOG_LEVEL=WARNING
       - API_WORKERS=4
       - API_KEY_REQUIRED=true
-    secrets:
-      - database_url
-      - redis_url
-      - jwt_secret
+
     volumes:
       - scraper_prod_logs:/app/logs
     depends_on:
@@ -136,14 +137,11 @@ services:
   worker:
     image: ghcr.io/evaou/ai-scraper-worker:latest
     environment:
-      - DATABASE_URL_FILE=/run/secrets/database_url
-      - REDIS_URL_FILE=/run/secrets/redis_url
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
       - WORKER_CONCURRENCY=5
       - LOG_LEVEL=WARNING
       - PLAYWRIGHT_BROWSER=chromium
-    secrets:
-      - database_url
-      - redis_url
     volumes:
       - scraper_prod_logs:/app/logs
     depends_on:
@@ -187,18 +185,6 @@ services:
     networks:
       - scraper_network
     restart: unless-stopped
-
-secrets:
-  postgres_password:
-    file: ./secrets/postgres_password.txt
-  redis_password:
-    file: ./secrets/redis_password.txt
-  database_url:
-    file: ./secrets/database_url.txt
-  redis_url:
-    file: ./secrets/redis_url.txt
-  jwt_secret:
-    file: ./secrets/jwt_secret.txt
 
 volumes:
   postgres_prod_data:
