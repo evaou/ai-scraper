@@ -184,7 +184,7 @@ if command -v docker > /dev/null 2>&1 && docker compose version > /dev/null 2>&1
     echo -e "${GREEN}✅ Server is ready for Docker Compose deployment!${NC}"
     echo ""
     echo "🚀 To deploy:"
-    echo "1. Configure GitHub secrets (see DEPLOYMENT_SETUP.md)"
+    echo "1. Configure GitHub secrets (see DEPLOYMENT_GUIDE.md)"
     echo "2. Push to main branch or trigger workflow manually"
     echo "3. Monitor deployment at: GitHub → Actions → Deploy to Linode"
 else
@@ -200,6 +200,6 @@ fi
 
 echo ""
 echo "📚 Documentation:"
-echo "  • Setup Guide: DEPLOYMENT_SETUP.md"
+echo "  • Setup Guide: DEPLOYMENT_GUIDE.md"
 echo "  • Troubleshooting: Check GitHub Actions logs"
 echo "  • Monitor: docker compose -f docker-compose.prod.yml logs -f"

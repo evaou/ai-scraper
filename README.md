@@ -436,35 +436,34 @@ docker compose up -d
 
 ---
 
-## 📈 Production Deployment
+## 🚀 Production Deployment
 
-### Server Setup
+**Ready to deploy to production?** See our complete deployment guide:
 
+### 📋 [**DEPLOYMENT_GUIDE.md**](DEPLOYMENT_GUIDE.md)
+
+The comprehensive guide covers:
+- ✅ **Automated CI/CD** via GitHub Actions
+- ✅ **Linode server setup** ($5/month)
+- ✅ **Docker Compose V2** deployment
+- ✅ **SSL certificates** and domain setup
+- ✅ **Monitoring and troubleshooting**
+
+**Quick Start:**
+1. Create Linode server
+2. Configure 8 GitHub secrets
+3. Push to main → Auto-deploy! 🎉
+
+### Manual Local Deployment
+
+For local production testing:
 ```bash
-# Ubuntu 22.04+ recommended
-sudo apt update && sudo apt upgrade -y
-
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sh get-docker.sh
-
-# Deploy application
-git clone <repository-url>
-cd ai_scraper
-cp .env.example .env.production
-nano .env.production  # Configure for production
-
-# Start services
+# Start production stack locally
 docker compose -f docker-compose.prod.yml up -d
+
+# Check status
+docker compose -f docker-compose.prod.yml ps
 ```
-
-### Security Considerations
-
-- Change default passwords in production
-- Use API key authentication for public deployments
-- Configure proper CORS settings
-- Use HTTPS in production
-- Regular security updates
 
 ---
 
