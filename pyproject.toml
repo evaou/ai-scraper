@@ -82,6 +82,7 @@ test = [
     "faker>=19.0.0",
     "testcontainers>=3.7.0",
     "coverage[toml]>=7.0.0",
+    "locust>=2.17.0",
 ]
 docs = [
     "mkdocs>=1.5.0",
@@ -105,7 +106,7 @@ Changelog = "https://github.com/yourusername/ai_scraper/blob/main/CHANGELOG.md"
 
 [project.scripts]
 ai-scraper = "app.main:app"
-scraper-worker = "app.workers.scraper_worker:main"
+scraper-worker = "app.worker.scraper_worker:main"
 
 [tool.setuptools]
 package-dir = {"" = "."}
@@ -248,6 +249,11 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
+# Exclude manual and load test files from automated test runs
+ignore = [
+    "tests/manual_test.py",
+    "tests/load/test_api.py",
+]
 python_functions = ["test_*"]
 python_classes = ["Test*"]
 addopts = [
