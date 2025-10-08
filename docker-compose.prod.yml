@@ -128,6 +128,7 @@ services:
       - scraper_prod_logs:/var/log/nginx
     depends_on:
       - api
+      - prometheus
     networks:
       - scraper_network
     restart: unless-stopped

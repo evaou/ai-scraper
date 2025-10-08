@@ -189,12 +189,19 @@ if ! check_health "api"; then
     exit 1
 fi
 
+# Start monitoring (required by nginx)
+echo "📊 Starting monitoring services..."
+docker compose -f docker-compose.prod.yml up -d prometheus
+sleep 5  # Give prometheus a moment to start
+
 # Start nginx (load balancer)
 echo "🌐 Starting load balancer..."
 docker compose -f docker-compose.prod.yml up -d nginx
 
 if ! check_health "nginx"; then
     echo -e "${RED}❌ Load balancer failed to start${NC}"
+    echo "Checking nginx logs for errors..."
+    docker compose -f docker-compose.prod.yml logs nginx --tail=20
     exit 1
 fi
 
@@ -243,11 +250,7 @@ while [ $health_attempt -le $max_health_attempts ]; do
     health_attempt=$((health_attempt + 1))
 done
 
-# Start monitoring if enabled
-if docker compose -f docker-compose.prod.yml config --services | grep -q prometheus; then
-    echo "📊 Starting monitoring services..."
-    docker compose -f docker-compose.prod.yml up -d prometheus
-fi
+# Monitoring already started earlier
 
 # Clean up old images and containers
 echo "🧹 Cleaning up old resources..."
