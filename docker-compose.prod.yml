@@ -75,6 +75,10 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - DEBUG=false
       - LOG_LEVEL=WARNING
@@ -139,6 +143,10 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
       - WORKER_CONCURRENCY=5
       - LOG_LEVEL=WARNING
       - PLAYWRIGHT_BROWSER=chromium
