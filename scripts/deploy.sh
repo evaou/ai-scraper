@@ -61,8 +61,13 @@ echo "🔍 Verifying environment variables..."
 echo "POSTGRES_USER: ${POSTGRES_USER:-NOT_SET}"
 echo "POSTGRES_DB: ${POSTGRES_DB:-NOT_SET}"
 echo "DATABASE_URL: ${DATABASE_URL:0:50}... (truncated for security)"
-echo "REDIS_URL: ${REDIS_URL:0:30}... (truncated for security)"
-echo "Full REDIS_URL (for debugging): ${REDIS_URL}"
+echo ""
+echo "Redis Configuration:"
+echo "REDIS_HOST: ${REDIS_HOST:-NOT_SET}"
+echo "REDIS_PORT: ${REDIS_PORT:-NOT_SET}"
+echo "REDIS_PASSWORD: ${REDIS_PASSWORD:+***SET***}${REDIS_PASSWORD:-NOT_SET}"
+echo "REDIS_DB: ${REDIS_DB:-NOT_SET}"
+echo "REDIS_URL: ${REDIS_URL:-NOT_SET}"
 
 # Function to check if service is healthy
 check_health() {
