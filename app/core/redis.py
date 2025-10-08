@@ -32,7 +32,18 @@ async def init_redis() -> Redis:
     password = settings.REDIS_PASSWORD
     db = settings.REDIS_DB
     
+    # Handle empty string passwords
+    if password == "":
+        password = None
+        logger.warning("REDIS_PASSWORD is empty string, treating as None")
+    
     logger.info(f"Using Redis connection: {host}:{port}, db={db}, auth={'yes' if password else 'no'}")
+    
+    # Additional debugging
+    if password:
+        logger.info(f"Password length: {len(password)} characters")
+    else:
+        logger.warning("No Redis password provided, but Redis server requires authentication")
 
     redis_client = redis.Redis(
         host=host,
