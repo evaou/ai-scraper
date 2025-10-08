@@ -19,23 +19,30 @@ async def init_redis() -> Redis:
     """Initialize Redis connection."""
     global redis_client
 
-    try:
-        # Parse Redis URL
-        parsed_url = urlparse(str(settings.REDIS_URL))
-        
-        # Extract connection parameters with fallbacks
-        host = parsed_url.hostname or "redis"
-        port = parsed_url.port or 6379
-        password = parsed_url.password
-        db = int(parsed_url.path.lstrip("/")) if parsed_url.path and parsed_url.path != "/" else 0
-        
-    except (ValueError, AttributeError) as e:
-        logger.warning(f"Failed to parse REDIS_URL: {e}. Using fallback configuration.")
-        # Fallback to individual environment variables or defaults
-        host = getattr(settings, 'REDIS_HOST', 'redis')
-        port = getattr(settings, 'REDIS_PORT', 6379)
-        password = getattr(settings, 'REDIS_PASSWORD', None)
-        db = getattr(settings, 'REDIS_DB', 0)
+    # Prefer individual Redis configuration parameters for reliability
+    if hasattr(settings, 'REDIS_HOST') and settings.REDIS_HOST:
+        # Use individual configuration parameters
+        host = settings.REDIS_HOST
+        port = settings.REDIS_PORT
+        password = settings.REDIS_PASSWORD
+        db = settings.REDIS_DB
+        logger.info(f"Using individual Redis configuration: {host}:{port}")
+    else:
+        # Fallback to URL parsing
+        try:
+            parsed_url = urlparse(str(settings.REDIS_URL))
+            host = parsed_url.hostname or "redis"
+            port = parsed_url.port or 6379
+            password = parsed_url.password
+            db = int(parsed_url.path.lstrip("/")) if parsed_url.path and parsed_url.path != "/" else 0
+            logger.info(f"Using Redis URL configuration: {host}:{port}")
+            
+        except (ValueError, AttributeError) as e:
+            logger.warning(f"Failed to parse REDIS_URL: {e}. Using default configuration.")
+            host = "redis"
+            port = 6379
+            password = None
+            db = 0
 
     redis_client = redis.Redis(
         host=host,
