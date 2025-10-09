@@ -1,5 +1,4 @@
 name: Email USD Spot Selling Rate
-name: Email USD Spot Selling Rate
 
 on:
   schedule:
@@ -28,14 +27,27 @@ jobs:
         id: collect
         run: |
           set -e
-          RATE=$(./client/get_usd_rate.sh --quiet || true)
+          # Retry up to 3 times (site occasionally flaky)
+          RATE=""
+          for i in 1 2 3; do
+            RATE=$(./client/get_usd_rate.sh --quiet || true)
+            if [ -n "$RATE" ]; then
+              echo "Got rate on attempt $i: $RATE" >&2
+              break
+            fi
+            echo "Attempt $i failed; retrying in 15s..." >&2
+            sleep 15
+          done
+
           if [ -z "$RATE" ]; then
-            echo "Rate collection failed or empty" >&2
+            echo "Rate collection failed after retries" >&2
             echo "rate=" >> $GITHUB_OUTPUT
-            exit 0  # Do not fail workflow; email will indicate failure
+            echo "timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+            exit 0  # Non-fatal; email step will reflect failure
           fi
-            TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          echo "Collected rate: $RATE at $TS"
+
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "Collected rate: $RATE at $TS" >&2
           echo "rate=$RATE" >> $GITHUB_OUTPUT
           echo "timestamp=$TS" >> $GITHUB_OUTPUT
 
