@@ -51,25 +51,51 @@ jobs:
           echo "rate=$RATE" >> $GITHUB_OUTPUT
           echo "timestamp=$TS" >> $GITHUB_OUTPUT
 
-        - name: Build email content
-          id: email
-          shell: bash
-          run: |
-            RATE="${{ steps.collect.outputs.rate }}"
-            TS="${{ steps.collect.outputs.timestamp }}"
-            if [ -z "$RATE" ]; then
-              SUBJECT="[AI Scraper] USD Spot Selling Rate Collection FAILED"
-              BODY="USD Spot Selling rate could not be collected.\n\nPossible reasons:\n- Source site unreachable\n- API down\n- HTML layout change\n\nAction Recommended: Manually run script locally to verify."
-            else
-              SUBJECT="[AI Scraper] USD Spot Selling Rate: $RATE (UTC $TS)"
-              BODY="Daily USD Spot Selling Rate Report\n\nTimestamp (UTC): $TS\nUSD Spot Selling Rate: $RATE\n\nSource: Bank of Taiwan\nMode: Automated GitHub Action\nRepository: $GITHUB_REPOSITORY\nRun URL: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n\nNotes:\n- This is the SPOT SELLING rate (not cash)\n- Script: client/get_usd_rate.sh\n- Adjust schedule in .github/workflows/usd_rate_email.yml"
-            fi
-            SUBJECT_ESCAPED=${SUBJECT//'%'/'%25'}
-            BODY_ESCAPED=${BODY//'%'/'%25'}
-            BODY_ESCAPED=${BODY_ESCAPED//$'\n'/'%0A'}
-            BODY_ESCAPED=${BODY_ESCAPED//$'\r'/'%0D'}
-            echo "subject=$SUBJECT_ESCAPED" >> $GITHUB_OUTPUT
-            echo "body=$BODY_ESCAPED" >> $GITHUB_OUTPUT
+      - name: Build email content
+        id: email
+        shell: bash
+        run: |
+          RATE="${{ steps.collect.outputs.rate }}"
+          TS="${{ steps.collect.outputs.timestamp }}"
+          if [ -z "$RATE" ]; then
+            SUBJECT="[AI Scraper] USD Spot Selling Rate Collection FAILED"
+            BODY=$(cat <<'EOF'
+USD Spot Selling rate could not be collected.
+
+Possible reasons:
+- Source site unreachable
+- API down
+- HTML layout change
+
+Action Recommended: Manually run script locally to verify.
+EOF
+)
+          else
+            SUBJECT="[AI Scraper] USD Spot Selling Rate: $RATE (UTC $TS)"
+            BODY=$(cat <<EOF
+Daily USD Spot Selling Rate Report
+
+Timestamp (UTC): $TS
+USD Spot Selling Rate: $RATE
+
+Source: Bank of Taiwan
+Mode: Automated GitHub Action
+Repository: $GITHUB_REPOSITORY
+Run URL: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+Notes:
+- This is the SPOT SELLING rate (not cash)
+- Script: client/get_usd_rate.sh
+- Adjust schedule in .github/workflows/usd_rate_email.yml
+EOF
+)
+          fi
+          SUBJECT_ESCAPED=${SUBJECT//'%'/'%25'}
+          BODY_ESCAPED=${BODY//'%'/'%25'}
+          BODY_ESCAPED=${BODY_ESCAPED//$'\n'/'%0A'}
+          BODY_ESCAPED=${BODY_ESCAPED//$'\r'/'%0D'}
+          echo "subject=$SUBJECT_ESCAPED" >> $GITHUB_OUTPUT
+          echo "body=$BODY_ESCAPED" >> $GITHUB_OUTPUT
 
       - name: Send email
         if: always()
