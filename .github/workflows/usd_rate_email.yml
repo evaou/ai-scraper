@@ -1,8 +1,9 @@
 name: Email USD Spot Selling Rate
+name: Email USD Spot Selling Rate
 
 on:
   schedule:
-    - cron: "10 9 * * *"  # Every day at 09:10 UTC which is 5:10 PM Taipei time
+    - cron: "10 9 * * *"  # Every day at 09:10 UTC (17:10 Taipei)
   workflow_dispatch: {}
 
 permissions:
@@ -14,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      AI_SCRAPER_API_URL: https://paramita-scraper.duckdns.org/api/v1  # Replace with actual production API base
+      AI_SCRAPER_API_URL: https://paramita-scraper.duckdns.org/api/v1
       TZ: UTC
     steps:
       - name: Checkout repository
@@ -26,13 +27,14 @@ jobs:
       - name: Collect USD spot selling rate
         id: collect
         run: |
+          set -e
           RATE=$(./client/get_usd_rate.sh --quiet || true)
           if [ -z "$RATE" ]; then
             echo "Rate collection failed or empty" >&2
             echo "rate=" >> $GITHUB_OUTPUT
             exit 0  # Do not fail workflow; email will indicate failure
           fi
-          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "Collected rate: $RATE at $TS"
           echo "rate=$RATE" >> $GITHUB_OUTPUT
           echo "timestamp=$TS" >> $GITHUB_OUTPUT
@@ -75,7 +77,6 @@ Notes:
 EOF
 )
           fi
-          # Escape % to avoid issues in output parsing
           SUBJECT_ESCAPED=${SUBJECT//'%'/'%25'}
           BODY_ESCAPED=${BODY//'%'/'%25'}
           BODY_ESCAPED=${BODY_ESCAPED//$'\n'/'%0A'}
