@@ -58,7 +58,8 @@ jobs:
           TS="${{ steps.collect.outputs.timestamp }}"
           if [ -z "$RATE" ]; then
             SUBJECT="[AI Scraper] USD Spot Selling Rate Collection FAILED"
-            BODY=$(cat <<'EOF'
+            # Use here-doc into variable via read -d '' for POSIX-safe multi-line
+            read -r -d '' BODY <<'EOT'
 USD Spot Selling rate could not be collected.
 
 Possible reasons:
@@ -67,11 +68,10 @@ Possible reasons:
 - HTML layout change
 
 Action Recommended: Manually run script locally to verify.
-EOF
-)
+EOT
           else
             SUBJECT="[AI Scraper] USD Spot Selling Rate: $RATE (UTC $TS)"
-            BODY=$(cat <<EOF
+            read -r -d '' BODY <<EOT
 Daily USD Spot Selling Rate Report
 
 Timestamp (UTC): $TS
@@ -86,8 +86,7 @@ Notes:
 - This is the SPOT SELLING rate (not cash)
 - Script: client/get_usd_rate.sh
 - Adjust schedule in .github/workflows/usd_rate_email.yml
-EOF
-)
+EOT
           fi
           SUBJECT_ESCAPED=${SUBJECT//'%'/'%25'}
           BODY_ESCAPED=${BODY//'%'/'%25'}
