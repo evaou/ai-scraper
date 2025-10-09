@@ -1,29 +1,120 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Simple USD Rate Getter
-# Gets current USD selling spot rate from Bank of Taiwan
+###############################################################################
+# get_usd_rate.sh
+#
+# Production-aware USD Selling Spot Rate helper.
+#
+# Tries to fetch the USD rate via the deployed AI Scraper API first (async job
+# submission + polling handled inside usd_rate_scraper.py). If that fails it
+# automatically falls back to the local/manual scraping mode.
+#
+# Usage:
+#   ./get_usd_rate.sh                  # Local (defaults to localhost API)
+#   ./get_usd_rate.sh --prod           # Use production API URL (set below or via env)
+#   ./get_usd_rate.sh --api https://api.example.com/api/v1
+#   ./get_usd_rate.sh --quiet          # Suppress stderr (only prints rate)
+#   AI_SCRAPER_API_URL=... ./get_usd_rate.sh
+#
+# Exit Codes:
+#   0  Success (rate printed)
+#   1  Generic failure
+#   2  Prerequisite missing
+###############################################################################
+
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRAPER_SCRIPT="$SCRIPT_DIR/usd_rate_scraper.py"
-URL="https://rate.bot.com.tw/xrt?Lang=en-US"
 
-# Check if Python script exists
-if [ ! -f "$SCRAPER_SCRIPT" ]; then
-    echo "Error: USD Rate Scraper not found at: $SCRAPER_SCRIPT" >&2
-    exit 1
+# Default target URL for Bank of Taiwan rates page
+RATE_SOURCE_URL="https://rate.bot.com.tw/xrt?Lang=en-US"
+
+# Defaults (can be overridden)
+: "${AI_SCRAPER_API_URL:=http://localhost:8000/api/v1}"
+PROD_API_URL_DEFAULT="https://YOUR_PRODUCTION_HOST/api/v1"
+USE_PROD=false
+CUSTOM_API=""
+QUIET=false
+
+print_usage() {
+    sed -n '1,50p' "$0" | grep -E '^# ' | sed 's/^# //'
+}
+
+log() { $QUIET && return 0; echo "[get_usd_rate] $*" >&2; }
+err() { echo "[get_usd_rate][error] $*" >&2; }
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --prod)
+            USE_PROD=true
+            shift
+            ;;
+        --api)
+            CUSTOM_API="$2"; shift 2;
+            ;;
+        --quiet|-q)
+            QUIET=true; shift;
+            ;;
+        --help|-h)
+            print_usage; exit 0;
+            ;;
+        --url)
+            # Allow overriding the target scrape URL
+            RATE_SOURCE_URL="$2"; shift 2;
+            ;;
+        *)
+            err "Unknown argument: $1"; print_usage; exit 1;
+            ;;
+    esac
+done
+
+# Resolve API base url precedence: explicit flag > prod shortcut > existing env
+if [[ -n "$CUSTOM_API" ]]; then
+    AI_SCRAPER_API_URL="$CUSTOM_API"
+elif $USE_PROD; then
+    AI_SCRAPER_API_URL="$PROD_API_URL_DEFAULT"
 fi
 
-# Check if Python is available
-if ! command -v python3 &> /dev/null; then
-    echo "Error: Python 3 is required but not installed" >&2
-    exit 1
+# Validate python & script
+if [[ ! -f "$SCRAPER_SCRIPT" ]]; then
+    err "USD Rate scraper not found at $SCRAPER_SCRIPT"; exit 2;
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+    err "python3 is required"; exit 2;
 fi
 
-# Get the rate (quietly, errors suppressed)
-if RATE=$(python3 "$SCRAPER_SCRIPT" --url "$URL" --manual-fallback --quiet 2>/dev/null); then
+log "Target URL: $RATE_SOURCE_URL"
+log "API Base: $AI_SCRAPER_API_URL (will attempt API mode first)"
+
+export AI_SCRAPER_API_URL
+
+RATE=""
+API_FAILED=false
+
+# 1. Try API-powered scrape (no --manual-fallback)
+if RATE=$(python3 "$SCRAPER_SCRIPT" --url "$RATE_SOURCE_URL" --quiet 2>/dev/null); then
+    :
+else
+    API_FAILED=true
+    log "API mode failed; attempting manual fallback..."
+fi
+
+# 2. Fallback to manual mode if needed
+if [[ -z "${RATE}" ]]; then
+    if RATE=$(python3 "$SCRAPER_SCRIPT" --url "$RATE_SOURCE_URL" --manual-fallback --quiet 2>/dev/null); then
+        log "Retrieved rate via manual fallback"
+    fi
+fi
+
+if [[ -n "${RATE}" ]]; then
     echo "$RATE"
     exit 0
-else
-    echo "Error: Failed to get USD rate" >&2
-    exit 1
 fi
+
+if $API_FAILED; then
+    err "Failed to retrieve USD rate (API + manual fallback)"
+else
+    err "Failed to retrieve USD rate"
+fi
+exit 1

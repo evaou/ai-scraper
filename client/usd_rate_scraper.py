@@ -278,35 +278,57 @@ def extract_usd_selling_rate(html_content: str, css_selector: Optional[str] = No
                 rate_text = element_text
         
         if not css_selector or not rate_text:
-            # Fallback: search for USD selling rate patterns
-            logger.info("Searching for USD selling rate patterns in HTML text")
-            
-            parser.feed(html_content)
-            text_content = parser.get_text()
-            
-            # Bank of Taiwan specific patterns for USD selling rate
-            patterns = [
-                # Target the SECOND rate (Spot Selling) after finding USD and Spot Buying
-                r'American Dollar \(USD\).*?Spot Buying.*?(\d+\.\d+).*?Spot Selling.*?(\d+\.\d+)',
-                r'USD.*?data-table="Spot Selling"[^>]*>\s*(\d+\.\d+)',
-                # Look for the higher rate in 30.x range (selling rates are typically higher)
-                r'\b(3[0-1]\.[4-9]\d{2})\b',  # 30.4xx or 31.4xx format (selling rates are higher)
-                r'\b(3[0-1]\.\d{3})\b',  # Fallback: any 30.xxx or 31.xxx format
-            ]
-            
-            for i, pattern in enumerate(patterns):
-                matches = re.findall(pattern, text_content, re.IGNORECASE | re.DOTALL)
-                if matches:
-                    if i == 0:  # First pattern captures both buying and selling - we want selling (second group)
-                        rate_text = matches[0][1] if isinstance(matches[0], tuple) and len(matches[0]) >= 2 else matches[0]
-                    else:
-                        # Handle tuple results from patterns with multiple groups
-                        rate_text = matches[0] if isinstance(matches[0], str) else matches[0][-1]
-                    logger.debug(f"Pattern {i} matched: {rate_text}")
-                    break
+            # First attempt: Parse table row explicitly to ensure we return SPOT SELLING and not CASH SELLING.
+            # Bank of Taiwan layout typically: Currency | Cash Buying | Cash Selling | Spot Buying | Spot Selling | ...
+            # We want the 4th numeric cell (index 3 after currency) representing Spot Selling.
+            logger.info("Attempting structured extraction of USD Spot Selling rate from table row")
+            table_row_pattern = re.compile(
+                r"<tr[^>]*>.*?(American Dollar\s*\(USD\)|USD).*?</tr>",
+                re.IGNORECASE | re.DOTALL,
+            )
+            row_match = table_row_pattern.search(html_content)
+            if row_match:
+                row_html = row_match.group(0)
+                # Extract all potential numeric rate cells inside <td> tags for this row
+                cell_values = re.findall(r"<td[^>]*>\s*([0-9]{1,2}\.[0-9]{3})\s*</td>", row_html)
+                if len(cell_values) >= 4:
+                    # Index 3 => Spot Selling
+                    rate_text = cell_values[3]
+                    logger.debug(f"Extracted Spot Selling from table parsing: {rate_text}")
+                else:
+                    logger.debug("Table row found but insufficient numeric cells; falling back to pattern search")
             else:
-                logger.warning("No USD selling rate patterns found in content")
-                return None
+                logger.debug("USD table row not matched; falling back to pattern search")
+
+            if not rate_text:
+                # Fallback: search for USD selling rate patterns (spot-specific where possible)
+                logger.info("Searching for USD selling rate patterns in HTML text")
+                parser.feed(html_content)
+                text_content = parser.get_text()
+
+                # Patterns prioritized for SPOT SELLING (avoid matching cash columns)
+                patterns = [
+                    # Capture Spot Buying then Spot Selling; take second group
+                    r'American Dollar \(USD\).*?Spot Buying.*?(\d+\.\d+).*?Spot Selling.*?(\d+\.\d+)',
+                    # Direct attribute marker for Spot Selling cell
+                    r'USD.*?data-table="Spot Selling"[^>]*>\s*(\d+\.\d+)',
+                    # Generic higher rate heuristic (selling spot is typically higher than buying spot)
+                    r'\b(3[0-1]\.[4-9]\d{2})\b',
+                    r'\b(3[0-1]\.\d{3})\b',
+                ]
+
+                for i, pattern in enumerate(patterns):
+                    matches = re.findall(pattern, text_content, re.IGNORECASE | re.DOTALL)
+                    if matches:
+                        if i == 0:  # First pattern captures buying + selling; pick selling
+                            rate_text = matches[0][1] if isinstance(matches[0], tuple) and len(matches[0]) >= 2 else matches[0]
+                        else:
+                            rate_text = matches[0] if isinstance(matches[0], str) else matches[0][-1]
+                        logger.debug(f"Pattern {i} matched Spot Selling candidate: {rate_text}")
+                        break
+                else:
+                    logger.warning("No USD spot selling rate patterns found in content")
+                    return None
         
         # Clean and convert to Decimal
         rate_text = re.sub(r'[^\d.,]', '', str(rate_text))  # Keep only digits, dots, and commas
