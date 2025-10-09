@@ -1,0 +1,78 @@
+name: Email USD Spot Selling Rate
+
+on:
+  schedule:
+    - cron: "10 9 * * *"  # Every day at 09:10 UTC which is 5:10 PM Taipei time
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  send-usd-spot-email:
+    name: Collect & Email USD Spot Selling Rate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AI_SCRAPER_API_URL: https://paramita-scraper.duckdns.org/api/v1  # Replace with actual production API base
+      TZ: UTC
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure script is executable
+        run: chmod +x client/get_usd_rate.sh
+
+      - name: Collect USD spot selling rate
+        id: collect
+        run: |
+          RATE=$(./client/get_usd_rate.sh --quiet || true)
+          if [ -z "$RATE" ]; then
+            echo "Rate collection failed or empty" >&2
+            echo "rate=" >> $GITHUB_OUTPUT
+            exit 0  # Do not fail workflow; email will indicate failure
+          fi
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "Collected rate: $RATE at $TS"
+          echo "rate=$RATE" >> $GITHUB_OUTPUT
+          echo "timestamp=$TS" >> $GITHUB_OUTPUT
+
+      - name: Build email content
+        id: email
+        run: |
+          RATE="${{ steps.collect.outputs.rate }}"
+          TS="${{ steps.collect.outputs.timestamp }}"
+          if [ -z "$RATE" ]; then
+            SUBJECT="[AI Scraper] USD Spot Selling Rate Collection FAILED"
+            BODY="USD Spot Selling rate could not be collected at $(date -u).\n\nPossible reasons:\n- Source site unreachable\n- API down\n- HTML layout change\n\nAction Recommended: Manually run script locally to verify."
+          else
+            SUBJECT="[AI Scraper] USD Spot Selling Rate: $RATE (UTC $TS)"
+            BODY="Daily USD Spot Selling Rate Report\n\nTimestamp (UTC): $TS\nUSD Spot Selling Rate: $RATE\n\nSource: Bank of Taiwan\nMode: Automated GitHub Action\nRepository: $GITHUB_REPOSITORY\nRun URL: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n\nNotes:\n- This is the SPOT SELLING rate (not cash)\n- Script: client/get_usd_rate.sh\n- Adjust schedule in .github/workflows/usd_rate_email.yml"
+          fi
+          printf "%s" "$SUBJECT" > email_subject.txt
+          printf "%s" "$BODY" > email_body.txt
+          echo "subject_file=email_subject.txt" >> $GITHUB_OUTPUT
+          echo "body_file=email_body.txt" >> $GITHUB_OUTPUT
+
+      - name: Send email
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server: ${{ secrets.SMTP_SERVER }}
+          port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: ${{ steps.email.outputs.subject_file }}
+          to: ${{ secrets.USD_RATE_TO_EMAIL }}
+          from: ${{ secrets.USD_RATE_FROM_EMAIL }}
+          secure: true
+          body: ${{ steps.email.outputs.body_file }}
+          convert_markdown: false
+
+      - name: Summary
+        run: |
+          if [ -n "${{ steps.collect.outputs.rate }}" ]; then
+            echo "✅ Email dispatched with USD Spot Selling Rate: ${{ steps.collect.outputs.rate }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Email dispatched with failure notice (rate unavailable)." >> $GITHUB_STEP_SUMMARY
+          fi
