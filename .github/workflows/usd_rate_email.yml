@@ -44,29 +44,58 @@ jobs:
           TS="${{ steps.collect.outputs.timestamp }}"
           if [ -z "$RATE" ]; then
             SUBJECT="[AI Scraper] USD Spot Selling Rate Collection FAILED"
-            BODY="USD Spot Selling rate could not be collected at $(date -u).\n\nPossible reasons:\n- Source site unreachable\n- API down\n- HTML layout change\n\nAction Recommended: Manually run script locally to verify."
+            BODY=$(cat <<'EOF'
+USD Spot Selling rate could not be collected.
+
+Possible reasons:
+- Source site unreachable
+- API down
+- HTML layout change
+
+Action Recommended: Manually run script locally to verify.
+EOF
+)
           else
             SUBJECT="[AI Scraper] USD Spot Selling Rate: $RATE (UTC $TS)"
-            BODY="Daily USD Spot Selling Rate Report\n\nTimestamp (UTC): $TS\nUSD Spot Selling Rate: $RATE\n\nSource: Bank of Taiwan\nMode: Automated GitHub Action\nRepository: $GITHUB_REPOSITORY\nRun URL: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n\nNotes:\n- This is the SPOT SELLING rate (not cash)\n- Script: client/get_usd_rate.sh\n- Adjust schedule in .github/workflows/usd_rate_email.yml"
+            BODY=$(cat <<EOF
+Daily USD Spot Selling Rate Report
+
+Timestamp (UTC): $TS
+USD Spot Selling Rate: $RATE
+
+Source: Bank of Taiwan
+Mode: Automated GitHub Action
+Repository: $GITHUB_REPOSITORY
+Run URL: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+Notes:
+- This is the SPOT SELLING rate (not cash)
+- Script: client/get_usd_rate.sh
+- Adjust schedule in .github/workflows/usd_rate_email.yml
+EOF
+)
           fi
-          printf "%s" "$SUBJECT" > email_subject.txt
-          printf "%s" "$BODY" > email_body.txt
-          echo "subject_file=email_subject.txt" >> $GITHUB_OUTPUT
-          echo "body_file=email_body.txt" >> $GITHUB_OUTPUT
+          # Escape % to avoid issues in output parsing
+          SUBJECT_ESCAPED=${SUBJECT//'%'/'%25'}
+          BODY_ESCAPED=${BODY//'%'/'%25'}
+          BODY_ESCAPED=${BODY_ESCAPED//$'\n'/'%0A'}
+          BODY_ESCAPED=${BODY_ESCAPED//$'\r'/'%0D'}
+          echo "subject=$SUBJECT_ESCAPED" >> $GITHUB_OUTPUT
+          echo "body=$BODY_ESCAPED" >> $GITHUB_OUTPUT
 
       - name: Send email
         if: always()
         uses: dawidd6/action-send-mail@v3
         with:
-          server: ${{ secrets.SMTP_SERVER }}
-          port: ${{ secrets.SMTP_PORT }}
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: ${{ steps.email.outputs.subject_file }}
+          subject: ${{ steps.email.outputs.subject }}
           to: ${{ secrets.USD_RATE_TO_EMAIL }}
           from: ${{ secrets.USD_RATE_FROM_EMAIL }}
           secure: true
-          body: ${{ steps.email.outputs.body_file }}
+          body: ${{ steps.email.outputs.body }}
           convert_markdown: false
 
       - name: Summary
