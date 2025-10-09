@@ -94,6 +94,7 @@ curl -X POST "http://localhost:8000/api/v1/scrape" \
 ```
 
 **Response:**
+
 ```json
 {
   "job_id": "uuid-string",
@@ -150,23 +151,27 @@ ai-scraper/
 ### **Technology Stack**
 
 **Backend & API**
+
 - FastAPI 0.112+ (Async Python web framework)
 - Pydantic v2 (Data validation & serialization)
 - SQLAlchemy 2.0+ (Database ORM)
 - Alembic (Database migrations)
 
 **Scraping & AI**
+
 - Playwright 1.48+ (Browser automation)
 - OpenAI GPT API (Content extraction)
 - BeautifulSoup4 (HTML parsing)
 
 **Infrastructure**
+
 - PostgreSQL 15+ (Primary database)
 - Redis 7+ (Caching & task queue)
 - Nginx (Load balancer & reverse proxy)
 - Docker & Docker Compose (Containerization)
 
 **Monitoring & DevOps**
+
 - Prometheus (Metrics collection)
 - GitHub Actions (CI/CD pipeline)
 - pytest (Testing framework)
@@ -179,8 +184,9 @@ ai-scraper/
 ### **📋 Automated CI/CD Pipeline**
 
 **✅ Production Ready Features:**
+
 - [x] Automated CI/CD with GitHub Actions
-- [x] Zero-downtime deployment with health checks  
+- [x] Zero-downtime deployment with health checks
 - [x] Automatic rollback on deployment failure
 - [x] Multi-replica load balancing with Nginx
 - [x] Comprehensive monitoring with Prometheus
@@ -190,11 +196,13 @@ ai-scraper/
 ### **🖥️ Step 1: Create & Configure Server**
 
 **1.1 Create Linode Instance**
+
 1. Go to [Linode Cloud Manager](https://cloud.linode.com)
 2. Create new Linode: Ubuntu 22.04 LTS, Nanode 1GB ($5/month) minimum
 3. Set root password and note your server IP
 
 **1.2 Automated Server Setup**
+
 ```bash
 # SSH to your server
 ssh root@YOUR_SERVER_IP
@@ -217,17 +225,18 @@ chmod +x validate-deployment.sh
 **Required Secrets (8 total):**
 
 | Secret Name         | Value                 | Example              |
-|--------------------|-----------------------|----------------------|
-| `LINODE_HOST`      | Your Linode server IP | `192.168.1.100`      |
-| `LINODE_USER`      | SSH username          | `root`               |
-| `SSH_PRIVATE_KEY`  | Private key content   | Generate with script |
-| `POSTGRES_DB`      | Database name         | `scraper_prod`       |
-| `POSTGRES_USER`    | Database username     | `scraper_user`       |
-| `POSTGRES_PASSWORD`| Database password     | Generate with script |
-| `REDIS_PASSWORD`   | Redis password        | Generate with script |
-| `JWT_SECRET_KEY`   | JWT signing secret    | Generate with script |
+| ------------------- | --------------------- | -------------------- |
+| `LINODE_HOST`       | Your Linode server IP | `192.168.1.100`      |
+| `LINODE_USER`       | SSH username          | `root`               |
+| `SSH_PRIVATE_KEY`   | Private key content   | Generate with script |
+| `POSTGRES_DB`       | Database name         | `scraper_prod`       |
+| `POSTGRES_USER`     | Database username     | `scraper_user`       |
+| `POSTGRES_PASSWORD` | Database password     | Generate with script |
+| `REDIS_PASSWORD`    | Redis password        | Generate with script |
+| `JWT_SECRET_KEY`    | JWT signing secret    | Generate with script |
 
 **Generate Secure Passwords:**
+
 ```bash
 # Run locally to generate passwords
 ./generate-secrets.sh
@@ -236,6 +245,7 @@ chmod +x validate-deployment.sh
 ### **🎯 Step 3: Deploy**
 
 **Option A: Automatic Deploy (Recommended)**
+
 ```bash
 git add .
 git commit -m "feat: deploy to production"
@@ -244,6 +254,7 @@ git push origin main
 ```
 
 **Option B: Manual Trigger**
+
 1. Go to GitHub → Actions → "Deploy to Production"
 2. Click "Run workflow" → "Run workflow"
 3. Monitor deployment progress
@@ -251,11 +262,12 @@ git push origin main
 ### **📊 Step 4: Monitor Deployment**
 
 **Health Check Endpoints:**
+
 ```bash
 # API Health Check
 curl http://YOUR_SERVER_IP/health
 
-# Full API Documentation  
+# Full API Documentation
 http://YOUR_SERVER_IP/docs
 
 # Metrics (Prometheus)
@@ -263,6 +275,7 @@ http://YOUR_SERVER_IP/metrics
 ```
 
 **Container Status:**
+
 ```bash
 # SSH to server and check
 ssh root@YOUR_SERVER_IP
@@ -270,11 +283,11 @@ docker compose -f /opt/ai-scraper/docker-compose.prod.yml ps
 
 # Expected output:
 # NAME                    STATUS                    PORTS
-# ai-scraper-api-1        Up (healthy)             
-# ai-scraper-api-2        Up (healthy)             
-# ai-scraper-worker-1     Up (healthy)             
-# ai-scraper-worker-2     Up (healthy)             
-# ai-scraper-worker-3     Up (healthy)             
+# ai-scraper-api-1        Up (healthy)
+# ai-scraper-api-2        Up (healthy)
+# ai-scraper-worker-1     Up (healthy)
+# ai-scraper-worker-2     Up (healthy)
+# ai-scraper-worker-3     Up (healthy)
 # scraper_db_prod         Up (healthy)             5432/tcp
 # scraper_nginx_prod      Up                       0.0.0.0:80->80/tcp
 # scraper_redis_prod      Up (healthy)             6379/tcp
@@ -287,15 +300,17 @@ docker compose -f /opt/ai-scraper/docker-compose.prod.yml ps
 ### **📈 Current Architecture Performance**
 
 **Load Balancing & Scaling:**
+
 - **API Replicas**: 2 instances behind Nginx load balancer
-- **Worker Processes**: 3 dedicated scraping workers  
+- **Worker Processes**: 3 dedicated scraping workers
 - **Database**: PostgreSQL with connection pooling
 - **Cache**: Redis with authentication for session management
 - **Auto-scaling**: Can dynamically scale workers based on queue length
 
 **Performance Benchmarks:**
+
 - **Health Check**: < 50ms
-- **Job Submission**: < 200ms  
+- **Job Submission**: < 200ms
 - **Result Retrieval**: < 100ms
 - **Concurrent Users**: 100+ supported
 - **Basic Scraping**: 1-5 seconds per URL
@@ -306,15 +321,17 @@ docker compose -f /opt/ai-scraper/docker-compose.prod.yml ps
 ### **🔧 Scaling Strategies**
 
 **Horizontal Scaling:**
+
 ```bash
 # Scale API replicas
 docker compose up -d --scale api=5
 
-# Scale worker processes  
+# Scale worker processes
 docker compose up -d --scale worker=10
 ```
 
 **Resource Allocation:**
+
 ```yaml
 # Production resource limits (docker-compose.prod.yml)
 api:
@@ -324,8 +341,8 @@ api:
       limits:
         memory: 512M
         cpus: "0.5"
-      
-worker:  
+
+worker:
   deploy:
     replicas: 3
     resources:
@@ -335,6 +352,7 @@ worker:
 ```
 
 **Cost Optimization:**
+
 - **Memory Usage**: ~2GB total for full stack
 - **CPU Usage**: ~2 cores for high throughput
 - **Linode 2GB**: $12/month (recommended minimum)
@@ -362,6 +380,7 @@ curl "http://localhost:8000/api/v1/admin/queue"
 ## 🗄️ Database Management
 
 ### **Migrations**
+
 ```bash
 # Check current migration status
 docker compose exec api alembic current
@@ -374,6 +393,7 @@ docker compose exec api alembic revision --autogenerate -m "Description"
 ```
 
 ### **Database Access**
+
 ```bash
 # Connect to PostgreSQL
 docker compose exec db psql -U scraper_user -d scraper_db
@@ -392,17 +412,19 @@ SELECT * FROM jobs ORDER BY created_at DESC LIMIT 10;
 ### **Common Deployment Issues**
 
 **❌ GitHub Actions Deployment Fails**
+
 ```bash
 # Check deployment logs in GitHub Actions tab
 # Common fixes applied in latest version:
 
 # 1. Redis Authentication Issues → Fixed with individual env vars
-# 2. Port Conflicts → Fixed with proper service dependencies  
+# 2. Port Conflicts → Fixed with proper service dependencies
 # 3. Health Check Failures → Fixed with extended wait times
 # 4. Nginx Upstream Errors → Fixed with prometheus dependency
 ```
 
 **🔄 Automatic Rollback Triggered**
+
 - The deployment includes **intelligent rollback**
 - Triggers on health check failures
 - Restores previous working configuration
@@ -410,6 +432,7 @@ SELECT * FROM jobs ORDER BY created_at DESC LIMIT 10;
 - Logs rollback reason in GitHub Actions
 
 **📊 Service Health Issues**
+
 ```bash
 # SSH to server for detailed diagnostics
 ssh root@YOUR_SERVER_IP
@@ -427,6 +450,7 @@ docker compose restart api
 ### **Common Development Issues**
 
 **Port already in use:**
+
 ```bash
 # Find process using port 8000
 lsof -i :8000
@@ -435,6 +459,7 @@ kill -9 <PID>
 ```
 
 **Database connection error:**
+
 ```bash
 # Reset database
 docker compose down -v
@@ -444,6 +469,7 @@ docker compose up -d
 ```
 
 **Performance Tuning:**
+
 ```bash
 # Monitor resource usage
 docker stats
@@ -460,7 +486,9 @@ curl "http://localhost:8000/api/v1/admin/queue"
 ## 🔄 Maintenance & Updates
 
 ### **Updating the Application**
+
 Simply push to `main` branch - GitHub Actions handles everything:
+
 ```bash
 git add .
 git commit -m "feat: new feature"
@@ -469,6 +497,7 @@ git push origin main
 ```
 
 ### **Log Management**
+
 ```bash
 # View logs with timestamps
 docker compose logs -f --timestamps api
@@ -482,6 +511,7 @@ docker system prune -f --volumes
 ## 🧪 Testing
 
 ### **Running Tests**
+
 ```bash
 # Activate virtual environment
 source venv/bin/activate
@@ -494,6 +524,7 @@ pytest tests/unit/ -v
 ```
 
 ### **Testing API with Client Scripts**
+
 ```bash
 # Test USD Rate Scraper (working)
 cd client/
@@ -519,6 +550,7 @@ python3 usd_rate_scraper.py --url "https://httpbin.org/html" --verbose
 | **Redis**          | 7-alpine             | ✅ Healthy    |
 
 ### **Performance**
+
 - **API Response Time**: < 100ms for health checks
 - **Scraping Jobs**: Complete in 2-5 seconds for simple pages
 - **Worker Processing**: 2 concurrent workers by default
@@ -551,7 +583,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **🚀 Production Ready!** Your AI Scraper deployment includes:
-- ⚡ **Auto-scaling**: 2 API replicas + 3 worker processes  
+
+- ⚡ **Auto-scaling**: 2 API replicas + 3 worker processes
 - 🔄 **Zero-downtime**: Rolling deployments with health checks
 - 📊 **Monitoring**: Prometheus metrics + comprehensive logging
 - 🛡️ **Security**: Redis authentication + environment isolation
