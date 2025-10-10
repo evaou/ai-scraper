@@ -281,6 +281,7 @@ jobs:
             echo "# API Configuration"
             echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}"
             echo "API_KEY_REQUIRED=true"
+            echo "ENABLE_DOCS=true"  # Expose docs in production
             echo ""
             echo "# Image tags (use short SHA to match docker metadata action)"
             echo "API_IMAGE_TAG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:${{ github.ref_name }}-${SHORT_SHA}"

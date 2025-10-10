@@ -84,25 +84,16 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     description="A production-ready, scalable web scraping API built with FastAPI, Playwright, and containerized architecture.",
     version=settings.PROJECT_VERSION,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json" if settings.DEBUG else None,
-    docs_url=f"{settings.API_V1_STR}/docs" if settings.DEBUG else None,
-    redoc_url=f"{settings.API_V1_STR}/redoc" if settings.DEBUG else None,
+    # Expose docs if DEBUG or ENABLE_DOCS flag is true
+    openapi_url=f"{settings.API_V1_STR}/openapi.json" if (settings.DEBUG or settings.ENABLE_DOCS) else None,
+    docs_url=f"{settings.API_V1_STR}/docs" if (settings.DEBUG or settings.ENABLE_DOCS) else None,
+    redoc_url=f"{settings.API_V1_STR}/redoc" if (settings.DEBUG or settings.ENABLE_DOCS) else None,
     lifespan=lifespan,
-    # Custom OpenAPI configuration
     openapi_tags=[
-        {
-            "name": "scraping",
-            "description": "Web scraping operations - submit jobs, check status, and retrieve results",
-        },
-        {
-            "name": "health",
-            "description": "Health checks and system status monitoring",
-        },
-        {
-            "name": "admin",
-            "description": "Administrative operations and system metrics",
-        },
-    ]
+        {"name": "scraping", "description": "Web scraping operations - submit jobs, check status, and retrieve results"},
+        {"name": "health", "description": "Health checks and system status monitoring"},
+        {"name": "admin", "description": "Administrative operations and system metrics"},
+    ],
 )
 
 # Add CORS middleware

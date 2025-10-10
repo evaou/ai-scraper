@@ -152,6 +152,7 @@ class Settings(BaseSettings):
     # Development
     DEBUG: bool = Field(default=True, description="Enable debug mode")
     RELOAD: bool = Field(default=False, description="Enable auto-reload")
+    ENABLE_DOCS: bool = Field(default=True, description="Expose interactive API docs even when DEBUG is false")
 
     # Health Check Configuration
     HEALTH_CHECK_TIMEOUT: int = Field(default=5, description="Health check timeout in seconds")

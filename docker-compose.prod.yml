@@ -81,6 +81,7 @@ services:
       - REDIS_DB=${REDIS_DB}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - DEBUG=false
+      - ENABLE_DOCS=${ENABLE_DOCS:-false}
       - LOG_LEVEL=WARNING
       - API_WORKERS=4
       - API_KEY_REQUIRED=true
