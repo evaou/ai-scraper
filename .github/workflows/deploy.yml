@@ -130,6 +130,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pre-build Docker cleanup (free space)
+        run: |
+          echo "🧹 Disk space before cleanup:" && df -h
+          echo "Docker images before cleanup:" && docker image ls -a | head -n 20 || true
+          echo "Pruning..."
+          docker system prune -af || true
+          docker volume prune -f || true
+          # Remove dangling build cache if any (Buildx often handles, but just in case)
+          docker builder prune -af || true
+          echo "🧹 Disk space after cleanup:" && df -h
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -162,6 +175,19 @@ jobs:
           labels: ${{ steps.meta-api.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Verify API build context completeness
+        run: |
+          for path in requirements.txt alembic.ini migrations app; do
+            if [ ! -e "$path" ]; then
+              echo "❌ Missing expected build context item: $path" >&2
+              exit 1
+            else
+              echo "✅ Found $path"
+            fi
+          done
 
       - name: Show built API tags
         run: |
@@ -189,6 +215,19 @@ jobs:
           labels: ${{ steps.meta-worker.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+      - name: Verify Worker build context completeness
+        run: |
+          for path in requirements.txt alembic.ini migrations app; do
+            if [ ! -e "$path" ]; then
+              echo "❌ Missing expected build context item: $path" >&2
+              exit 1
+            else
+              echo "✅ Found $path"
+            fi
+          done
 
       - name: Show built Worker tags
         run: |
@@ -204,6 +243,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check deployment secrets
         id: check-secrets
@@ -270,6 +311,11 @@ jobs:
             set -e
             cd /opt/ai-scraper
 
+            echo "🧹 Remote pre-deploy cleanup (free old images)"
+            docker system prune -af || true
+            docker volume prune -f || true
+            df -h
+
             # Log in to GitHub Container Registry (suppress credential warning)
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin 2>/dev/null || echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
@@ -329,6 +375,10 @@ jobs:
                 fi
               fi
             fi
+
+            echo "🧹 Post-pull cleanup to ensure space"
+            docker image prune -f || true
+            df -h
 
             # Deploy with zero-downtime if script exists, otherwise simple deployment
             if [ -f "./scripts/deploy.sh" ]; then
