@@ -83,16 +83,19 @@ jobs:
         with:
           server_address: smtp.gmail.com
           server_port: 587
+          secure: auto # Use STARTTLS (auto-detection)
           username: ${{ secrets.GMAIL_USERNAME }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
           subject: ${{ steps.email.outputs.subject }}
           to: ${{ secrets.USD_RATE_TO_EMAIL }}
           from: ${{ secrets.GMAIL_USERNAME }}
-          secure: true
           body: ${{ steps.email.outputs.body }}
+          content_type: text/plain
           convert_markdown: false
           ignore_cert: false
-          priority: normal
+          # Alternative config if above fails:
+          # server_port: 465 (with secure: true for direct SSL)
+          # server_port: 25 (with secure: false for plain SMTP)
 
       - name: Summary
         run: |
