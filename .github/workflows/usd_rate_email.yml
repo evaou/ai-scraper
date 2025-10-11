@@ -126,7 +126,7 @@ jobs:
           username: ${{ secrets.GMAIL_USERNAME }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
           subject: ${{ steps.email.outputs.subject }}
-          to: ${{ secrets.USD_RATE_TO_EMAIL }}
+          to: ${{ secrets.TO_EMAIL }}
           from: ${{ secrets.GMAIL_USERNAME }}
           body: ${{ steps.email.outputs.body }}
           convert_markdown: false

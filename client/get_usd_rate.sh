@@ -10,7 +10,7 @@
 # automatically falls back to the local/manual scraping mode.
 #
 # Usage:
-#   ./get_usd_rate.sh                  # Local (defaults to localhost API)
+#   ./get_usd_rate.sh                  # Production API (defaults to deployed API)
 #   ./get_usd_rate.sh --prod           # Use production API URL (set below or via env)
 #   ./get_usd_rate.sh --api https://api.example.com/api/v1
 #   ./get_usd_rate.sh --quiet          # Suppress stderr (only prints rate)
@@ -31,7 +31,7 @@ SCRAPER_SCRIPT="$SCRIPT_DIR/usd_rate_scraper.py"
 RATE_SOURCE_URL="https://rate.bot.com.tw/xrt?Lang=en-US"
 
 # Defaults (can be overridden)
-: "${AI_SCRAPER_API_URL:=http://localhost:8000/api/v1}"
+: "${AI_SCRAPER_API_URL:=https://paramita-scraper.duckdns.org/api/v1}"
 PROD_API_URL_DEFAULT="https://YOUR_PRODUCTION_HOST/api/v1"
 USE_PROD=false
 CUSTOM_API=""

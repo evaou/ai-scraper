@@ -1,0 +1,172 @@
+name: Stock Price Alert Email
+
+on:
+  schedule:
+    - cron: "40 13 * * *" # Every day at 13:40 UTC (21:40 Taipei)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  send-stock-alert-email:
+    name: Stock Price Alert - Buy Opportunities
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: UTC
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Get stock buy opportunities
+        id: collect
+        run: |
+          set -e
+          
+          # Make script executable
+          chmod +x ./client/get_stock_prices.sh
+          
+          # Run the stock price fetcher with GitHub secrets
+          echo "🎯 Checking stock buy opportunities..." >&2
+          
+          STOCK_OUTPUT=$(./client/get_stock_prices.sh \
+            --symbols "${{ secrets.STOCK_SYMBOLS }}" \
+            --thresholds "${{ secrets.STOCK_THRESHOLDS }}" \
+            --output table 2>&1 | grep -v '^\[get_stock_prices\]' || true)
+          
+          # Check if we have buy opportunities (output contains data rows with prices)
+          if echo "$STOCK_OUTPUT" | grep -E '\$[0-9]+\.[0-9]{2}' > /dev/null; then
+            echo "📈 Buy opportunities found!" >&2
+            echo "has_opportunities=true" >> $GITHUB_OUTPUT
+          else
+            echo "🚫 No buy opportunities at current thresholds" >&2
+            echo "has_opportunities=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Store the output for email
+          # Properly escape for GitHub Actions multiline output
+          {
+            echo "stock_output<<EOF"
+            echo "$STOCK_OUTPUT"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+          
+          # Store timestamp
+          TS=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          TS_TAIPEI=$(TZ='Asia/Taipei' date -d "$TS" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || TZ='Asia/Taipei' date -j -f "%Y-%m-%dT%H:%M:%SZ" "$TS" +"%Y-%m-%d %H:%M:%S %Z" 2>/dev/null || echo "$TS")
+          echo "timestamp=$TS" >> $GITHUB_OUTPUT
+          echo "timestamp_taipei=$TS_TAIPEI" >> $GITHUB_OUTPUT
+
+      - name: Build stock alert email content
+        id: email
+        shell: bash
+        run: |
+          HAS_OPPORTUNITIES="${{ steps.collect.outputs.has_opportunities }}"
+          STOCK_OUTPUT="${{ steps.collect.outputs.stock_output }}"
+          TS_TAIPEI="${{ steps.collect.outputs.timestamp_taipei }}"
+
+          echo "Building email content..." >&2
+
+          if [ "$HAS_OPPORTUNITIES" = "true" ]; then
+            # Count opportunities by counting lines with prices (contains '$')
+            OPPORTUNITY_COUNT=$(echo "$STOCK_OUTPUT" | grep -c '\$' || echo "0")
+            
+            # Build email content
+            SUBJECT="🎯 Stock Buy Alerts: $OPPORTUNITY_COUNT Opportunities Found!"
+            
+            # Create email body with the table output
+            BODY="Stock Buy Alert Summary - $TS_TAIPEI
+
+🎯 Buy Opportunities Found: $OPPORTUNITY_COUNT
+
+$STOCK_OUTPUT
+
+---
+This is an automated alert from your stock monitoring system.
+Generated at: $TS_TAIPEI"
+            
+            echo "send_email=true" >> $GITHUB_OUTPUT
+            echo "🎯 Stock buy opportunities found - email will be sent" >&2
+          else
+            SUBJECT="📈 Stock Monitor: No Buy Opportunities"
+            BODY="Stock monitoring report - $TS_TAIPEI
+
+No buy opportunities found at current thresholds.
+
+All monitored stocks are currently trading above their target buy prices.
+
+---
+Generated at: $TS_TAIPEI"
+            echo "send_email=false" >> $GITHUB_OUTPUT
+            echo "🚫 No stock buy opportunities found - no email will be sent" >&2
+          fi
+
+          # Output for GitHub Actions using proper multiline format
+          echo "subject=$SUBJECT" >> $GITHUB_OUTPUT
+          {
+            echo "body<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Send stock alert email via Gmail SMTP
+        if: steps.email.outputs.send_email == 'true'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: auto
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: ${{ steps.email.outputs.subject }}
+          to: ${{ secrets.TO_EMAIL }}
+          from: ${{ secrets.GMAIL_USERNAME }}
+          body: ${{ steps.email.outputs.body }}
+          convert_markdown: false
+          ignore_cert: false
+
+      - name: Summary
+        run: |
+          echo "## Stock Price Alert Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          HAS_OPPORTUNITIES="${{ steps.collect.outputs.has_opportunities }}"
+          STOCK_OUTPUT="${{ steps.collect.outputs.stock_output }}"
+          SEND_EMAIL="${{ steps.email.outputs.send_email }}"
+          
+          # Count opportunities
+          if [ "$HAS_OPPORTUNITIES" = "true" ]; then
+            OPPORTUNITY_COUNT=$(echo "$STOCK_OUTPUT" | grep -c '\$' || echo "0")
+            echo "🎯 **Buy Opportunities Found**: $OPPORTUNITY_COUNT" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Stock Table:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$STOCK_OUTPUT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📈 **Buy Opportunities Found**: 0" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All monitored stocks are currently trading above their target buy prices." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$SEND_EMAIL" = "true" ]; then
+            echo "📧 **Action**: Buy alert email sent" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "🚫 **Action**: No email sent" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🕒 **Timestamp**: ${{ steps.collect.outputs.timestamp_taipei }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📋 **Symbols**: ${{ secrets.STOCK_SYMBOLS }}" >> $GITHUB_STEP_SUMMARY
+          echo "🎯 **Thresholds**: ${{ secrets.STOCK_THRESHOLDS }}" >> $GITHUB_STEP_SUMMARY
