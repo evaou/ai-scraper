@@ -2,7 +2,7 @@ name: Email USD Spot Selling Rate
 
 on:
   schedule:
-    - cron: "10 9 * * *" # Every day at 09:10 UTC (17:10 Taipei)
+    - cron: "0 5 * * *" # Every day at 05:00 UTC (13:00 Taipei)
   workflow_dispatch: {}
 
 permissions:
@@ -74,7 +74,7 @@ jobs:
 
           # Determine if email should be sent
           SEND_EMAIL="false"
-          
+
           if [ -z "$RATE" ]; then
             # Don't send email for collection failures
             SEND_EMAIL="false"
@@ -136,11 +136,11 @@ jobs:
         run: |
           echo "## USD Rate Email Workflow Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           RATE="${{ steps.collect.outputs.rate }}"
           THRESHOLD="${{ secrets.USD_RATE_THRESHOLD }}"
           SEND_EMAIL="${{ steps.email.outputs.send_email }}"
-          
+
           if [ -z "$THRESHOLD" ]; then
             THRESHOLD="32.0 (default)"
           fi
