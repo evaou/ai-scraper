@@ -1,3 +1,20 @@
+# Stock Price Alert Workflow
+#
+# This workflow monitors stock prices from a Google Sheets spreadsheet and sends
+# email alerts when any stock's current price drops to or below its "Low Price"
+# threshold as defined in the spreadsheet.
+#
+# Required GitHub Secrets:
+# - GMAIL_USERNAME: Your Gmail address
+# - GMAIL_APP_PASSWORD: Your Gmail app password
+# - TO_EMAIL: Email address to receive alerts
+#
+# The workflow automatically:
+# 1. Fetches live stock data from Google Sheets
+# 2. Compares current prices vs low price thresholds from the spreadsheet
+# 3. Sends email alerts highlighting symbols that triggered the alert
+# 4. Runs daily at 9:40 PM Taipei time
+
 name: Stock Price Alert Email
 
 on:
@@ -36,24 +53,26 @@ jobs:
           # Make script executable
           chmod +x ./client/get_stock_prices.sh
 
-          echo "📈 Fetching stock prices..." >&2
+          echo "📈 Fetching stock prices from spreadsheet..." >&2
 
-          # Run stock price checker with GitHub secrets
-          STOCK_OUTPUT=$(./client/get_stock_prices.sh \
-            --symbols "${{ secrets.STOCK_SYMBOLS }}" \
-            --thresholds "${{ secrets.STOCK_THRESHOLDS }}" \
-            --output table)
+          # Run stock price checker using AI Scraper API with CSV fallback
+          STOCK_OUTPUT=$(./client/get_stock_prices.sh --api https://paramita-scraper.duckdns.org/api/v1 --output table --quiet)
 
           echo "Stock output received:" >&2
           echo "$STOCK_OUTPUT" >&2
 
           # Check if we have buy opportunities (table contains price data)
           if echo "$STOCK_OUTPUT" | grep -q '\$[0-9]'; then
-            echo "✅ Buy opportunities detected!" >&2
+            echo "🚨 Buy opportunities detected!" >&2
             HAS_ALERTS="true"
+            
+            # Extract symbols that have buy opportunities for highlighting
+            ALERT_SYMBOLS=$(echo "$STOCK_OUTPUT" | grep '\$[0-9]' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
+            echo "alert_symbols=$ALERT_SYMBOLS" >> $GITHUB_OUTPUT
           else
-            echo "ℹ️ No buy opportunities found" >&2
+            echo "✅ No buy opportunities found" >&2
             HAS_ALERTS="false"
+            echo "alert_symbols=" >> $GITHUB_OUTPUT
           fi
 
           # Store results for email step
@@ -80,24 +99,26 @@ jobs:
           secure: auto
           username: ${{ secrets.GMAIL_USERNAME }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
-          subject: "🎯 Stock Buy Opportunities Alert - ${{ steps.stock_check.outputs.taipei_time }}"
+          subject: "🚨 Stock Alert: Prices Below Low Thresholds - ${{ steps.stock_check.outputs.taipei_time }}"
           to: ${{ secrets.TO_EMAIL }}
           from: ${{ secrets.GMAIL_USERNAME }}
           body: |
-            Stock Buy Opportunities Alert
+            🚨 STOCK PRICE ALERT 🚨
 
             Generated: ${{ steps.stock_check.outputs.taipei_time }}
 
-            Buy Opportunities Found:
+            ⚡ SYMBOLS BELOW LOW PRICE: ${{ steps.stock_check.outputs.alert_symbols }}
+
+            Current vs Low Price Comparison:
 
             ${{ steps.stock_check.outputs.stock_table }}
 
             ---
 
-            Symbols monitored: ${{ secrets.STOCK_SYMBOLS }}
-            Price thresholds: ${{ secrets.STOCK_THRESHOLDS }}
+            📊 Data Source: Google Sheets via AI Scraper API (CSV fallback)
+            🎯 Alert Condition: Current price ≤ Low price threshold
 
-            This alert was generated automatically when stocks fell below their target prices.
+            This alert was generated automatically when stock prices dropped to or below their low price thresholds as defined in the spreadsheet. Data is fetched via AI Scraper API with automatic CSV fallback for reliability.
           convert_markdown: false
 
       - name: Workflow summary
@@ -105,12 +126,13 @@ jobs:
           echo "## 📈 Stock Price Alert Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**⏰ Run Time:** ${{ steps.stock_check.outputs.taipei_time }}" >> $GITHUB_STEP_SUMMARY
-          echo "**📊 Symbols:** ${{ secrets.STOCK_SYMBOLS }}" >> $GITHUB_STEP_SUMMARY
-          echo "**🎯 Thresholds:** ${{ secrets.STOCK_THRESHOLDS }}" >> $GITHUB_STEP_SUMMARY
+          echo "**📊 Data Source:** Google Sheets via AI Scraper API (CSV fallback)" >> $GITHUB_STEP_SUMMARY
+          echo "**🎯 Alert Logic:** Current Price ≤ Spreadsheet Low Price" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ steps.stock_check.outputs.has_alerts }}" = "true" ]; then
             echo "**🚨 Status:** Buy opportunities found - Email sent!" >> $GITHUB_STEP_SUMMARY
+            echo "**⚡ Triggered Symbols:** ${{ steps.stock_check.outputs.alert_symbols }}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**📋 Stock Results:**" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
@@ -119,5 +141,5 @@ jobs:
           else
             echo "**✅ Status:** No buy opportunities - No email sent" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "All monitored stocks are currently above their target prices." >> $GITHUB_STEP_SUMMARY
+            echo "All stocks are currently above their low price thresholds from the spreadsheet." >> $GITHUB_STEP_SUMMARY
           fi

@@ -2,14 +2,12 @@
 """
 Stock Price Fetcher from Google Sheets
 
-A script to fetch and parse stock prices from Google Sheets CSV export.
-Can operate in standalone mode or call remote API server for enhanced data processing.
+A script to fetch and parse stock prices from Google Sheets via AI Scraper API.
+Requires a running AI Scraper API server for HTML parsing and data processing.
 
 Usage:
-    python3 stock_price_fetcher.py --url "https://docs.google.com/spreadsheets/..."
     python3 stock_price_fetcher.py --url "https://docs.google.com/spreadsheets/..." --api-server "https://paramita-scraper.duckdns.org/api/v1"
     python3 stock_price_fetcher.py --config config.json
-    python3 stock_price_fetcher.py --symbols AAPL,GOOGL,MSFT --thresholds 150.0,2800.0,400.0
 
 Author: AI Scraper
 Version: 1.0.0
@@ -28,6 +26,8 @@ from urllib.error import URLError, HTTPError
 from urllib.parse import urlparse, urljoin
 import csv
 from io import StringIO
+
+
 
 
 # Default Configuration
@@ -92,7 +92,7 @@ def fetch_stock_data_via_api(url: str, api_server: str, timeout: int = 30) -> Li
     logger = logging.getLogger(__name__)
     
     try:
-        # Ensure we're using the pubhtml URL (not CSV)
+        # Ensure we're using the pubhtml URL for API parsing
         if 'pub?output=csv' in url:
             url = url.replace('pub?output=csv', 'pubhtml')
         elif '/pub' in url and 'pubhtml' not in url:
@@ -100,12 +100,9 @@ def fetch_stock_data_via_api(url: str, api_server: str, timeout: int = 30) -> Li
         
         logger.info(f"Parsing stock data via API from: {url}")
         
-        # Prepare API payload for scraping
+        # Prepare API payload (simple pattern like USD scraper)
         payload = {
-            'url': url,
-            'parse_tables': True,
-            'extract_data': True,
-            'timeout': timeout
+            'url': url
         }
         
         # Convert to JSON
@@ -166,21 +163,14 @@ def extract_stocks_from_api_response(api_response: Dict[str, Any]) -> List[Dict[
         
         content = api_response['content']
         
-        # Look for tables or structured data in the response
-        tables = content.get('tables', [])
-        if not tables:
-            # Try to extract from raw HTML or text
-            raw_data = content.get('text', '') or content.get('html', '')
-            if raw_data:
-                # Parse raw data for stock information
-                stocks = parse_raw_stock_data(raw_data)
-            else:
-                raise DataParsingError("No table data found in API response")
+        # Process scraped content - expect HTML or text content
+        raw_data = content if isinstance(content, str) else (content.get('text', '') or content.get('html', '') or str(content))
+        
+        if raw_data:
+            # Parse HTML content for stock data  
+            stocks = parse_raw_stock_data(raw_data)
         else:
-            # Process table data
-            for table in tables:
-                table_stocks = parse_table_data(table)
-                stocks.extend(table_stocks)
+            raise DataParsingError("No usable content found in API response")
         
         # Add metadata to each stock
         for stock in stocks:
@@ -427,8 +417,10 @@ def parse_csv_data(csv_content: str) -> List[Dict[str, Any]]:
             field_lower = field.lower().strip()
             if any(keyword in field_lower for keyword in ['symbol', 'ticker', 'code']):
                 column_mapping['symbol'] = field
-            elif any(keyword in field_lower for keyword in ['price', 'close', 'current', 'last']):
-                column_mapping['price'] = field
+            elif 'low price' in field_lower or 'low_price' in field_lower:
+                column_mapping['low_price'] = field
+            elif any(keyword in field_lower for keyword in ['current price', 'current_price', 'price', 'close', 'current', 'last']):
+                column_mapping['current_price'] = field
             elif any(keyword in field_lower for keyword in ['name', 'company', 'title']):
                 column_mapping['name'] = field
             elif any(keyword in field_lower for keyword in ['change', 'diff']):
@@ -455,20 +447,40 @@ def parse_csv_data(csv_content: str) -> List[Dict[str, Any]]:
                     logger.warning(f"Row {row_num}: No symbol column found, using row number")
                     stock_data['symbol'] = f"STOCK_{row_num}"
                 
-                # Extract price (required)
-                if 'price' in column_mapping:
-                    price_str = str(row[column_mapping['price']]).strip()
-                    # Clean price string (remove currency symbols, commas)
+                # Extract current price (required)
+                current_price = 0.0
+                if 'current_price' in column_mapping:
+                    price_str = str(row[column_mapping['current_price']]).strip()
                     price_clean = price_str.replace('$', '').replace(',', '').replace('%', '')
                     try:
-                        price = float(price_clean) if price_clean else 0.0
-                        stock_data['price'] = price
+                        current_price = float(price_clean) if price_clean else 0.0
+                    except ValueError:
+                        logger.warning(f"Row {row_num}: Invalid current price '{price_str}', using 0.0")
+                elif 'low_price' in column_mapping:  # Fallback if no current price column
+                    logger.info(f"Row {row_num}: Using low_price as current price (fallback)")
+                    price_str = str(row[column_mapping['low_price']]).strip()
+                    price_clean = price_str.replace('$', '').replace(',', '').replace('%', '')
+                    try:
+                        current_price = float(price_clean) if price_clean else 0.0
                     except ValueError:
                         logger.warning(f"Row {row_num}: Invalid price '{price_str}', using 0.0")
-                        stock_data['price'] = 0.0
-                else:
-                    logger.warning(f"Row {row_num}: No price column found")
-                    stock_data['price'] = 0.0
+                
+                stock_data['price'] = current_price
+                
+                # Extract low price threshold
+                low_price = 0.0
+                if 'low_price' in column_mapping:
+                    low_price_str = str(row[column_mapping['low_price']]).strip()
+                    low_price_clean = low_price_str.replace('$', '').replace(',', '').replace('%', '')
+                    try:
+                        low_price = float(low_price_clean) if low_price_clean else 0.0
+                    except ValueError:
+                        logger.warning(f"Row {row_num}: Invalid low price '{low_price_str}', using 0.0")
+                
+                stock_data['low_price'] = low_price
+                
+                # Determine if this is a buy opportunity (current price <= low price)
+                stock_data['is_buy_opportunity'] = current_price > 0 and low_price > 0 and current_price <= low_price
                 
                 # Extract optional fields
                 if 'name' in column_mapping:
@@ -721,16 +733,7 @@ Examples:
         api_server = config.get('api_server')
         if api_server:
             try:
-                # Test API server connectivity first
-                test_endpoint = urljoin(api_server.rstrip('/') + '/', 'health')
-                logger.info(f"Testing API server connectivity: {test_endpoint}")
-                
-                request = Request(test_endpoint, headers={'User-Agent': 'StockPriceFetcher/1.0.0'})
-                with urlopen(request, timeout=10) as response:
-                    if response.getcode() != 200:
-                        raise StockFetcherError(f"API health check failed: HTTP {response.getcode()}")
-                
-                # API server is available, proceed with HTML parsing
+                # Try API approach first (no health check, direct call like USD scraper)
                 stocks = fetch_stock_data_via_api(config['url'], api_server)
                 logger.info("Successfully fetched stock data via AI Scraper API")
                 
@@ -748,11 +751,17 @@ Examples:
         
         # Note: API processing is now integrated into the fetch process above
         
-        # Check thresholds if configured
-        buy_opportunities = []
-        if config.get('symbols') and config.get('thresholds'):
-            threshold_dict = dict(zip(config['symbols'], config['thresholds']))
-            buy_opportunities = check_thresholds(stocks, threshold_dict)
+        # Extract buy opportunities from spreadsheet data
+        buy_opportunities = [stock for stock in stocks if stock.get('is_buy_opportunity', False)]
+        
+        # Add discount calculation for buy opportunities
+        for opp in buy_opportunities:
+            current_price = opp.get('price', 0)
+            low_price = opp.get('low_price', 0)
+            if low_price > 0:
+                discount_pct = ((low_price - current_price) / low_price) * 100
+                opp['discount_pct'] = max(0, discount_pct)  # Ensure non-negative
+                opp['threshold'] = low_price  # For compatibility with existing output format
         
         # Prepare output
         result = {
@@ -760,24 +769,43 @@ Examples:
             'total_stocks': len(stocks),
             'stocks': stocks,
             'buy_opportunities': buy_opportunities,
-            'monitored_symbols': config.get('symbols', []),
+            'buy_count': len(buy_opportunities),
             'source_url': config['url'],
             'api_processed': bool(config.get('api_server'))
         }
         
-        # Output only buy opportunities table
+        # Output all stocks when any buy opportunities exist, otherwise just buy opportunities
         if buy_opportunities:
-            print(f"{'Symbol':<10} {'Price':<10} {'Target':<10} {'Discount':<10}")
-            print("-" * 40)
-            for opp in buy_opportunities:
-                symbol = opp.get('symbol', '')[:9]
-                price = f"${opp.get('price', 0):.2f}"
-                threshold = f"${opp.get('threshold', 0):.2f}"
-                discount = f"{opp.get('discount_pct', 0):.1f}%"
-                print(f"{symbol:<10} {price:<10} {threshold:<10} {discount:<10}")
+            # Show all stocks with buy opportunities highlighted
+            print(f"{'Symbol':<10} {'Current':<10} {'LowPrice':<10} {'Status':<10} {'Savings':<10}")
+            print("-" * 52)
+            
+            # Create a set of buy opportunity symbols for quick lookup
+            buy_symbols = {stock.get('symbol', '') for stock in buy_opportunities}
+            
+            for stock in stocks:
+                symbol = stock.get('symbol', '')[:9]
+                current = f"${stock.get('price', 0):.2f}"
+                low_price = f"${stock.get('low_price', 0):.2f}"
+                
+                if symbol in buy_symbols:
+                    status = "🎯 BUY"
+                    # Calculate discount for buy opportunities
+                    current_price = stock.get('price', 0)
+                    low_price_val = stock.get('low_price', 0)
+                    if low_price_val > 0:
+                        discount_pct = ((low_price_val - current_price) / low_price_val) * 100
+                        discount = f"{max(0, discount_pct):.1f}%"
+                    else:
+                        discount = "0.0%"
+                else:
+                    status = "HOLD"
+                    discount = "-"
+                
+                print(f"{symbol:<10} {current:<10} {low_price:<10} {status:<10} {discount:<10}")
         else:
             if not args.quiet:
-                print("No buy opportunities found at current thresholds.")
+                print("No buy opportunities found. All stocks are above their low price thresholds.")
         
         logger.info(f"Successfully processed {len(stocks)} stocks")
         if buy_opportunities:

@@ -5,15 +5,13 @@
 #
 # Production-aware Stock Price Fetcher helper.
 #
-# Tries to fetch stock data via the deployed AI Scraper API first (HTML parsing
-# for enhanced data extraction). If that fails it automatically falls back to 
-# direct CSV parsing mode.
+# Fetches stock data via the deployed AI Scraper API using HTML parsing
+# for enhanced data extraction.
 #
 # Usage:
 #   ./get_stock_prices.sh                              # Production API (defaults to deployed API)
 #   ./get_stock_prices.sh --prod                       # Use production API URL
 #   ./get_stock_prices.sh --api https://paramita-scraper.duckdns.org/api/v1
-#   ./get_stock_prices.sh --symbols "AAPL,GOOGL,MSFT" --thresholds "150,2800,400"
 #   ./get_stock_prices.sh --config stock_config.json --quiet
 #   AI_SCRAPER_API_URL=... ./get_stock_prices.sh
 #
@@ -45,20 +43,10 @@ print_usage() {
 log() { $QUIET && return 0; echo "[get_stock_prices] $*" >&2; }
 err() { echo "[get_stock_prices][error] $*" >&2; }
 
-# Function to validate threshold format
-validate_thresholds() {
-    local thresholds="$1"
-    if [[ ! "$thresholds" =~ ^[0-9.,]+$ ]]; then
-        err "Invalid threshold format: $thresholds"
-        err "Thresholds must be comma-separated numbers (e.g., 150.0,2800.0,400.0)"
-        return 1
-    fi
-}
+
 
 # Initialize variables with defaults first
 url="${STOCK_SHEET_URL:-$DEFAULT_SHEET_URL}"
-symbols="${STOCK_SYMBOLS:-}"
-thresholds="${STOCK_THRESHOLDS:-}"
 config_file=""
 output_format="json"
 quiet=false
@@ -76,12 +64,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --url)
             url="$2"; shift 2;
-            ;;
-        --symbols)
-            symbols="$2"; shift 2;
-            ;;
-        --thresholds)
-            thresholds="$2"; shift 2;
             ;;
         --config)
             config_file="$2"; shift 2;
@@ -119,11 +101,6 @@ if ! command -v python3 >/dev/null 2>&1; then
     err "python3 is required"; exit 2;
 fi
 
-# Validate thresholds if provided
-if [[ -n "$thresholds" ]]; then
-    validate_thresholds "$thresholds" || exit 1
-fi
-
 log "Target URL: $url"
 log "API Base: $AI_SCRAPER_API_URL (will attempt API mode first)"
 
@@ -136,14 +113,6 @@ if [[ -n "$config_file" ]]; then
     python_args+=("--config" "$config_file")
 else
     python_args+=("--url" "$url")
-    
-    if [[ -n "$symbols" ]]; then
-        python_args+=("--symbols" "$symbols")
-    fi
-    
-    if [[ -n "$thresholds" ]]; then
-        python_args+=("--thresholds" "$thresholds")
-    fi
 fi
 
 python_args+=("--output" "$output_format")
