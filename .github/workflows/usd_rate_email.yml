@@ -20,6 +20,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.x"
+
       - name: Ensure script is executable
         run: chmod +x client/get_usd_rate.sh
 
@@ -31,13 +36,21 @@ jobs:
           RATE=""
           for i in 1 2 3; do
             echo "Attempt $i: Fetching USD rate..." >&2
-            RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet || true)
+            
+            # For first attempt, show verbose output for debugging
+            if [ "$i" -eq 1 ]; then
+              echo "Debug output (verbose):" >&2
+              ./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" || echo "Verbose run completed with errors" >&2
+            fi
+            
+            # Actual rate collection with quiet flag
+            RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>/dev/null || true)
             if [ -n "$RATE" ]; then
               echo "✅ Got rate on attempt $i: $RATE" >&2
               break
             fi
             echo "❌ Attempt $i failed; retrying in 15s..." >&2
-            sleep 15
+            [ "$i" -lt 3 ] && sleep 15
           done
 
           if [ -z "$RATE" ]; then
