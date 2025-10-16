@@ -132,12 +132,23 @@ RESULT=""
 API_FAILED=false
 
 # 1. Try API-powered fetch (HTML parsing via AI Scraper API)
-if RESULT=$(python3 "$PYTHON_SCRIPT" "${python_args[@]}" 2>/dev/null); then
-    log "Retrieved stock data via AI Scraper API"
+# Capture both output and stderr to determine actual mode used
+TEMP_LOG=$(mktemp)
+if RESULT=$(python3 "$PYTHON_SCRIPT" "${python_args[@]}" 2>"$TEMP_LOG"); then
+    # Check stderr output to determine if API actually worked or fell back to CSV
+    if grep -q "falling back to CSV parsing" "$TEMP_LOG"; then
+        log "API mode failed; retrieved stock data via CSV fallback"
+        API_FAILED=true
+    elif grep -q "Successfully fetched stock data via AI Scraper API" "$TEMP_LOG"; then
+        log "Retrieved stock data via AI Scraper API"
+    else
+        log "Retrieved stock data successfully"
+    fi
 else
     API_FAILED=true
     log "API mode failed; attempting CSV fallback..."
 fi
+rm -f "$TEMP_LOG"
 
 # 2. Fallback to CSV mode if needed (remove --api-server argument)
 if [[ -z "${RESULT}" ]]; then
