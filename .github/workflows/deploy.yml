@@ -492,6 +492,14 @@ jobs:
         run: |
           if [ "${{ needs.deploy.result }}" == "success" ]; then
             echo "✅ Deployment to Linode successful!"
+            echo ""
+            echo "🌐 HTTP API available at: http://paramita-scraper.duckdns.org/api/v1"
+            echo "📚 API Documentation: http://paramita-scraper.duckdns.org/api/v1/docs"
+            echo ""
+            echo "🔒 To enable HTTPS:"
+            echo "  1. SSH to your server: ssh root@paramita-scraper.duckdns.org"
+            echo "  2. Run SSL setup: cd /opt/ai-scraper && sudo ./setup-ssl-enhanced.sh"
+            echo "  3. Update GitHub workflows to use HTTPS URLs"
           elif [ "${{ needs.rollback.result }}" == "success" ]; then
             echo "🔄 Deployment failed but rollback successful"
           elif [ "${{ needs.deploy.result }}" == "skipped" ]; then
