@@ -46,14 +46,37 @@ jobs:
         run: |
           set -e
           echo "Fetching USD rate using get_usd_rate.sh..." >&2
+
+          # Validate JWT_SECRET_KEY is configured
+          if [ -z "$AI_SCRAPER_API_KEY" ]; then
+            echo "⚠️ Warning: JWT_SECRET_KEY not configured - API mode will not work" >&2
+            echo "   Add JWT_SECRET_KEY to GitHub repository secrets to enable enhanced mode" >&2
+          else
+            echo "✅ JWT_SECRET_KEY configured for API authentication" >&2
+          fi
           RATE=""
           for i in 1 2 3; do
             echo "Attempt $i: Fetching USD rate..." >&2
             
             # For first attempt, show verbose output for debugging
             if [ "$i" -eq 1 ]; then
+              echo "Debug: Testing API authentication..." >&2
+              echo "Debug: JWT key configured: ${AI_SCRAPER_API_KEY:+YES (${AI_SCRAPER_API_KEY:0:8}...)}" >&2
+              API_TEST=$(curl -s -w "%{http_code}" -X POST "$AI_SCRAPER_API_URL/scrape" \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: ${AI_SCRAPER_API_KEY:-}" \
+                -d '{"url": "https://httpbin.org/html"}' 2>/dev/null || echo "000")
+              HTTP_CODE="${API_TEST: -3}"
+              if [ "$HTTP_CODE" = "202" ]; then
+                echo "✅ API authentication successful - enhanced mode active" >&2
+              elif [ "$HTTP_CODE" = "401" ]; then
+                echo "⚠️ API authentication failed (JWT key not registered) - using fallback mode" >&2
+              else
+                echo "⚠️ API server issue (HTTP $HTTP_CODE) - using fallback mode" >&2
+              fi
+              
               echo "Debug output (verbose):" >&2
-              ./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" || echo "Verbose run completed with errors" >&2
+              ./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" || echo "Verbose run completed" >&2
             fi
             
             # Actual rate collection with quiet flag - try API first, auto-fallback to manual
@@ -174,6 +197,21 @@ jobs:
           if [ -n "$RATE" ]; then
             echo "📊 **Current Rate**: $RATE TWD" >> $GITHUB_STEP_SUMMARY
             echo "🎯 **Threshold**: $THRESHOLD TWD" >> $GITHUB_STEP_SUMMARY
+            
+            # Check API mode status
+            API_TEST=$(curl -s -w "%{http_code}" -X POST "$AI_SCRAPER_API_URL/scrape" \
+              -H "Content-Type: application/json" \
+              -H "X-API-Key: ${AI_SCRAPER_API_KEY:-}" \
+              -d '{"url": "https://httpbin.org/html"}' 2>/dev/null || echo "000")
+            HTTP_CODE="${API_TEST: -3}"
+            if [ "$HTTP_CODE" = "202" ]; then
+              echo "🚀 **Mode**: Enhanced API mode (faster processing)" >> $GITHUB_STEP_SUMMARY
+            elif [ "$HTTP_CODE" = "401" ]; then
+              echo "⚙️ **Mode**: Fallback mode (JWT key not registered - run deployment to enable API)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚙️ **Mode**: Fallback mode (API server issue)" >> $GITHUB_STEP_SUMMARY
+            fi
+            
             if [ "$SEND_EMAIL" = "true" ]; then
               echo "📧 **Action**: Email sent (rate ≤ threshold)" >> $GITHUB_STEP_SUMMARY
             else
