@@ -34,11 +34,17 @@ async def create_jwt_api_key() -> tuple[str, str]:
     # Get JWT secret key
     jwt_secret = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
     
+    print(f"🔍 JWT_SECRET_KEY status: {'✅ Available' if jwt_secret and jwt_secret != 'dev-secret-key-change-in-production' else '❌ Missing/Default'}")
+    print(f"🔍 JWT key preview: {jwt_secret[:8]}..." if jwt_secret else "No key available")
+    
     if not jwt_secret or jwt_secret == "dev-secret-key-change-in-production":
-        print("⚠️ Warning: Using default JWT_SECRET_KEY. In production, ensure JWT_SECRET_KEY is properly set.")
+        print("❌ Error: JWT_SECRET_KEY environment variable not set or using default value.")
+        print("   Please ensure JWT_SECRET_KEY is properly configured.")
+        return "", ""
     
     # Database URL - use production settings
     database_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://scraper_user:password@localhost:5432/scraper_prod")
+    print(f"🔍 Database URL: {database_url.split('@')[0]}@***")
     
     # Create engine and session
     engine = create_async_engine(database_url, echo=False)
@@ -46,6 +52,7 @@ async def create_jwt_api_key() -> tuple[str, str]:
     
     try:
         async with async_session() as session:
+            print("🔍 Testing database connection...")
             # Check if an API key with this hash already exists
             key_hash = ApiKey.hash_key(jwt_secret)
             from sqlalchemy import select
@@ -90,6 +97,10 @@ def main():
     try:
         raw_key, key_prefix = asyncio.run(create_jwt_api_key())
         
+        if not raw_key:
+            print("❌ Failed to create JWT API key - check environment variables")
+            sys.exit(1)
+        
         print("")
         print("✅ GitHub Actions API authentication configured!")
         print(f"🔑 Using JWT_SECRET_KEY as API Key")
@@ -103,6 +114,10 @@ def main():
         
     except Exception as e:
         print(f"❌ Error creating JWT API key: {e}")
+        print(f"🔍 Error type: {type(e).__name__}")
+        import traceback
+        print("🔍 Full traceback:")
+        traceback.print_exc()
         sys.exit(1)
 
 

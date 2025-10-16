@@ -410,11 +410,13 @@ jobs:
 
             # Register JWT_SECRET_KEY as API key in database
             echo "🔑 Registering JWT_SECRET_KEY as API key in database..."
-            if docker compose -f docker-compose.prod.yml exec -T api python3 scripts/create-jwt-api-key.py; then
+            echo "Debug: JWT key to register: ${{ secrets.JWT_SECRET_KEY != '' && '✅ Available' || '❌ Missing' }}"
+
+            if docker compose -f docker-compose.prod.yml exec -T -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" api python3 scripts/create-jwt-api-key.py; then
               echo "✅ JWT_SECRET_KEY successfully registered as API key"
             else
               echo "⚠️ Failed to register JWT_SECRET_KEY - API mode may not work"
-              echo "   You can manually run: docker compose -f docker-compose.prod.yml exec api python3 scripts/create-jwt-api-key.py"
+              echo "   Manual registration: docker compose -f docker-compose.prod.yml exec -e JWT_SECRET_KEY='${{ secrets.JWT_SECRET_KEY }}' api python3 scripts/create-jwt-api-key.py"
             fi
 
             # Basic health check
