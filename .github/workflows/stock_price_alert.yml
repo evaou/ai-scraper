@@ -163,14 +163,6 @@ jobs:
           echo ""
           echo "🔍 Next scheduled run: Every day at 21:40 Taipei time (13:40 UTC)"
 
-            ---
-
-            📊 Data Source: Google Sheets via AI Scraper API (CSV fallback)
-            🎯 Alert Condition: Current price ≤ Low price threshold
-
-            This alert was generated automatically when stock prices dropped to or below their low price thresholds as defined in the spreadsheet. Data is fetched via AI Scraper API with automatic CSV fallback for reliability.
-          convert_markdown: false
-
       - name: Workflow summary
         run: |
           echo "## 📈 Stock Price Alert Summary" >> $GITHUB_STEP_SUMMARY
