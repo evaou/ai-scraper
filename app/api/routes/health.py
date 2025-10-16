@@ -144,3 +144,64 @@ async def get_version() -> dict:
         "api_version": settings.API_V1_STR,
         "uptime": time.time() - start_time
     }
+
+
+@router.get(
+    "/metrics",
+    summary="Get application metrics",
+    description="Get basic application metrics for monitoring"
+)
+async def get_metrics(
+    db: AsyncSession = Depends(get_db)
+) -> dict:
+    """
+    Get application metrics for monitoring purposes.
+    
+    This endpoint is used by the deployment health checks and monitoring systems.
+    """
+    try:
+        # Basic metrics
+        uptime = time.time() - start_time
+        
+        # Check service health
+        db_healthy = True
+        redis_healthy = True
+        
+        try:
+            await asyncio.wait_for(
+                db.execute(text("SELECT 1")),
+                timeout=2
+            )
+        except Exception:
+            db_healthy = False
+        
+        try:
+            redis_client = await get_redis()
+            await asyncio.wait_for(
+                redis_client.ping(),
+                timeout=2
+            )
+        except Exception:
+            redis_healthy = False
+        
+        return {
+            "status": "healthy" if (db_healthy and redis_healthy) else "unhealthy",
+            "uptime_seconds": uptime,
+            "version": settings.PROJECT_VERSION,
+            "timestamp": datetime.utcnow().isoformat(),
+            "components": {
+                "database": "healthy" if db_healthy else "unhealthy",
+                "redis": "healthy" if redis_healthy else "unhealthy"
+            },
+            "metrics": {
+                "requests_total": "not_implemented",
+                "active_connections": "not_implemented"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Metrics endpoint error: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }

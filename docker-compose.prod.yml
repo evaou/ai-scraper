@@ -127,6 +127,8 @@ services:
       - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - /var/www/html:/var/www/html
       - scraper_prod_logs:/var/log/nginx
+      # SSL certificates (uncomment after running setup-ssl-enhanced.sh)
+      # - /etc/letsencrypt:/etc/letsencrypt:ro
     depends_on:
       - api
       - prometheus

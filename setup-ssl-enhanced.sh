@@ -53,8 +53,11 @@ enable_ssl_volume() {
     # Create backup
     cp "$DOCKER_COMPOSE" "$DOCKER_COMPOSE.backup"
     
-    # Add SSL volume mount if not present
-    if ! grep -q "/etc/letsencrypt:/etc/letsencrypt:ro" "$DOCKER_COMPOSE"; then
+    # Uncomment SSL volume mount
+    if grep -q "# - /etc/letsencrypt:/etc/letsencrypt:ro" "$DOCKER_COMPOSE"; then
+        sed -i 's/# - \/etc\/letsencrypt:\/etc\/letsencrypt:ro/      - \/etc\/letsencrypt:\/etc\/letsencrypt:ro/' "$DOCKER_COMPOSE"
+        echo -e "${GREEN}✅ SSL volume mount enabled${NC}"
+    elif ! grep -q "/etc/letsencrypt:/etc/letsencrypt:ro" "$DOCKER_COMPOSE"; then
         sed -i '/scraper_prod_logs:\/var\/log\/nginx/a\      - /etc/letsencrypt:/etc/letsencrypt:ro' "$DOCKER_COMPOSE"
         echo -e "${GREEN}✅ SSL volume mount added${NC}"
     else
