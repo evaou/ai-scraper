@@ -249,9 +249,22 @@ jobs:
       - name: Check deployment secrets
         id: check-secrets
         run: |
+          echo "🔍 Checking deployment secrets..."
+
+          # List what we're checking (without revealing values)
+          echo "Required secrets:"
+          echo "  - LINODE_HOST: ${{ secrets.LINODE_HOST != '' && '✅ SET' || '❌ NOT SET' }}"
+          echo "  - LINODE_USER: ${{ secrets.LINODE_USER != '' && '✅ SET' || '❌ NOT SET' }}"  
+          echo "  - SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY != '' && '✅ SET' || '❌ NOT SET' }}"
+          echo "  - POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD != '' && '✅ SET' || '❌ NOT SET' }}"
+          echo "  - REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD != '' && '✅ SET' || '❌ NOT SET' }}"
+          echo "  - JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY != '' && '✅ SET' || '❌ NOT SET' }}"
+
           if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
             echo "deployment-ready=false" >> $GITHUB_OUTPUT
-            echo "⚠️ Deployment secrets not configured - skipping deployment"
+            echo "❌ Critical deployment secrets not configured - skipping deployment"
+            echo ""
+            echo "To fix: Add missing secrets in GitHub repository Settings > Secrets and variables > Actions"
           else
             echo "deployment-ready=true" >> $GITHUB_OUTPUT
             echo "✅ Deployment secrets configured - proceeding with deployment"
