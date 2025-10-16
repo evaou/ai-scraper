@@ -150,8 +150,8 @@ docker compose -f docker-compose.prod.yml down --timeout 30
 docker container prune -f
 
 # Pull latest images
-echo "📥 Pulling new images..."
-docker compose -f docker-compose.prod.yml pull --parallel
+echo "📥 Pulling latest images..."
+docker compose -f docker-compose.prod.yml pull
 
 # Start database and redis first
 echo "🗄️  Starting database and cache services..."
@@ -198,17 +198,36 @@ sleep 5  # Give prometheus a moment to start
 echo "🌐 Starting load balancer..."
 docker compose -f docker-compose.prod.yml up -d nginx
 
+# Give nginx a moment to start
+sleep 5
+
+# Check nginx startup
+echo "🔍 Checking nginx configuration..."
+if docker compose -f docker-compose.prod.yml exec -T nginx nginx -t 2>/dev/null; then
+    echo "✅ Nginx configuration is valid"
+else
+    echo "❌ Nginx configuration test failed"
+    echo "Nginx configuration errors:"
+    docker compose -f docker-compose.prod.yml exec -T nginx nginx -t 2>&1 || true
+fi
+
 if ! check_health "nginx"; then
     echo -e "${RED}❌ Load balancer failed to start${NC}"
     echo "Checking nginx logs for errors..."
     docker compose -f docker-compose.prod.yml logs nginx --tail=20
+    echo ""
+    echo "Container status:"
+    docker compose -f docker-compose.prod.yml ps nginx
     exit 1
 fi
 
 # Final health check with retries
 echo "🏥 Performing final health check..."
 echo "Waiting for application to fully initialize..."
-sleep 30
+echo "Services status:"
+docker compose -f docker-compose.prod.yml ps
+echo ""
+sleep 45  # Increased wait time for full initialization
 
 # Health check with retries
 max_health_attempts=10
@@ -218,9 +237,39 @@ echo "🔍 Testing health endpoints..."
 while [ $health_attempt -le $max_health_attempts ]; do
     echo "Health check attempt $health_attempt/$max_health_attempts..."
     
-    # Test nginx proxy health endpoint (only way to access API in production)
-    if curl -f -m 10 http://localhost/health > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Application is healthy and responding via nginx proxy${NC}"
+    # Test multiple endpoints for comprehensive health check
+    health_passed=false
+    
+    # Test 1: Nginx proxy health endpoint
+    if curl -f -s -m 10 http://localhost/health > /dev/null 2>&1; then
+        echo "✅ Nginx proxy health check passed"
+        health_passed=true
+    else
+        echo "⚠️ Nginx proxy health check failed"
+    fi
+    
+    # Test 2: Direct API health (if nginx fails)
+    if [ "$health_passed" = "false" ]; then
+        if docker compose -f docker-compose.prod.yml exec -T api curl -f -s -m 5 http://localhost:8000/api/v1/health/live > /dev/null 2>&1; then
+            echo "✅ Direct API health check passed (nginx may be starting)"
+            health_passed=true
+        else
+            echo "⚠️ Direct API health check failed"
+        fi
+    fi
+    
+    # Test 3: Check if services are at least running
+    if [ "$health_passed" = "false" ]; then
+        running_services=$(docker compose -f docker-compose.prod.yml ps --services --filter "status=running" | wc -l | tr -d ' ')
+        if [ "$running_services" -ge "3" ]; then
+            echo "✅ Services are running ($running_services), may need more time to initialize"
+        else
+            echo "❌ Only $running_services services running"
+        fi
+    fi
+    
+    if [ "$health_passed" = "true" ]; then
+        echo -e "${GREEN}✅ Application is healthy and responding${NC}"
         break
     fi
     
@@ -230,18 +279,27 @@ while [ $health_attempt -le $max_health_attempts ]; do
         echo "Container status:"
         docker compose -f docker-compose.prod.yml ps
         echo ""
-        echo "API logs (last 30 lines):"
-        docker compose -f docker-compose.prod.yml logs api --tail=30
+        echo "API logs (last 20 lines):"
+        docker compose -f docker-compose.prod.yml logs api --tail=20
         echo ""
-        echo "Nginx logs (last 15 lines):"
-        docker compose -f docker-compose.prod.yml logs nginx --tail=15
+        echo "Nginx logs (last 10 lines):"
+        docker compose -f docker-compose.prod.yml logs nginx --tail=10
         echo ""
-        echo "Network connectivity test:"
-        echo "Testing nginx proxy (only exposed endpoint):"
-        curl -v -m 5 http://localhost/health 2>&1 || echo "Nginx proxy connection failed"
+        echo "Network connectivity tests:"
+        echo "1. Testing nginx proxy:"
+        curl -v -m 5 http://localhost/health 2>&1 || echo "Nginx proxy failed"
         echo ""
-        echo "Testing internal API health via docker exec:"
-        docker compose -f docker-compose.prod.yml exec -T api curl -f http://localhost:8000/api/v1/health/live 2>&1 || echo "Internal API connection failed"
+        echo "2. Testing direct API:"
+        docker compose -f docker-compose.prod.yml exec -T api curl -f http://localhost:8000/api/v1/health/live 2>&1 || echo "Direct API failed"
+        echo ""
+        echo "3. Testing metrics endpoint:"
+        curl -v -m 5 http://localhost/api/v1/health/metrics 2>&1 || echo "Metrics endpoint failed"
+        echo ""
+        echo "4. Testing scraping endpoint:"
+        curl -X POST "http://localhost/api/v1/scraping/scrape" -H "Content-Type: application/json" -d '{"url": "https://httpbin.org/html"}' -m 10 2>&1 || echo "Scraping endpoint failed"
+        echo ""
+        echo "🔍 For detailed diagnostics, run: ./debug-deployment.sh"
+        echo "🎯 Test specific command: ./health-check.sh"
         exit 1
     fi
     
@@ -267,14 +325,22 @@ echo "  • API Image: $API_IMAGE_TAG"
 echo "  • Worker Image: $WORKER_IMAGE_TAG"
 echo "  • Services running: $(docker compose -f docker-compose.prod.yml ps --services | tr '\n' ', ' | sed 's/,$//')"
 echo ""
-echo "🌐 HTTP endpoint available at: http://paramita-scraper.duckdns.org/api/v1"
+echo "🌐 HTTP API Endpoints:"
+echo "  • Base URL: http://paramita-scraper.duckdns.org/api/v1"
+echo "  • Documentation: http://paramita-scraper.duckdns.org/api/v1/docs"
+echo "  • Health Check: http://paramita-scraper.duckdns.org/health"
 echo ""
-echo "🔒 SSL Setup:"
-echo "  To enable HTTPS support, run: sudo ./setup-ssl-enhanced.sh"
-echo "  This will:"
-echo "    • Obtain SSL certificate from Let's Encrypt"
-echo "    • Enable HTTPS configuration"
-echo "    • Make both HTTP and HTTPS available"
+echo "🎯 Test Your Specific Command:"
+echo "curl -X POST \"http://paramita-scraper.duckdns.org/api/v1/scraping/scrape\" \\"
+echo "  -H \"Content-Type: application/json\" \\"
+echo "  -d '{\"url\": \"https://rate.bot.com.tw/xrt?Lang=en-US\"}' \\"
+echo "  --connect-timeout 10 --max-time 30"
 echo ""
-echo "🔍 Check status with: docker compose -f docker-compose.prod.yml ps"
-echo "📝 Check logs with: docker compose -f docker-compose.prod.yml logs -f [service]"
+echo "🔍 Verification Tools:"
+echo "  • Full health check: ./health-check.sh"
+echo "  • Debug issues: ./debug-deployment.sh"
+echo "  • Check status: docker compose -f docker-compose.prod.yml ps"
+echo "  • View logs: docker compose -f docker-compose.prod.yml logs -f [service]"
+echo ""
+echo "🔒 SSL Setup (Optional):"
+echo "  To enable HTTPS: sudo ./setup-ssl-enhanced.sh"

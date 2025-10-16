@@ -32,14 +32,15 @@ enable_ssl_config() {
     # Uncomment SSL server block
     sed -i 's/^    # HTTPS server (uncomment when SSL is configured)/    # HTTPS server (SSL configured)/' "$NGINX_CONF"
     sed -i 's/^    # server {/    server {/' "$NGINX_CONF"
-    sed -i 's/^    #     listen 443 ssl http2;/        listen 443 ssl;/' "$NGINX_CONF"
+    sed -i 's/^    #     listen 443 ssl;/        listen 443 ssl;/' "$NGINX_CONF"
+    sed -i 's/^    #     http2 on;/        http2 on;/' "$NGINX_CONF"
     sed -i 's/^    #     server_name paramita-scraper.duckdns.org;/        server_name paramita-scraper.duckdns.org;/' "$NGINX_CONF"
     
     # Uncomment SSL certificate lines
     sed -i 's/^    #     ssl_certificate /        ssl_certificate /' "$NGINX_CONF"
     sed -i 's/^    #     ssl_certificate_key /        ssl_certificate_key /' "$NGINX_CONF"
     
-    # Uncomment SSL configuration and location blocks
+    # Uncomment SSL configuration and location blocks  
     sed -i 's/^    #     /        /' "$NGINX_CONF"
     sed -i 's/^    # }/    }/' "$NGINX_CONF"
     
