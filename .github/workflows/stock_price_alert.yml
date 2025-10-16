@@ -149,7 +149,7 @@ jobs:
         if: always()
         run: |
           echo "📊 Stock Price Alert Workflow Summary"
-          echo "====================================="
+          echo "======================================"
           echo "Timestamp: ${{ steps.stock_check.outputs.taipei_time }}"
           echo "Has Alerts: ${{ steps.stock_check.outputs.has_alerts }}"
           echo "Alert Symbols: ${{ steps.stock_check.outputs.alert_symbols }}"
