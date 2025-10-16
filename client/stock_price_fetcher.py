@@ -32,7 +32,7 @@ from io import StringIO
 
 # Default Configuration
 DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSkBKRRPFnMC85TZbONYkjBU10sJplY1SjJo31SbnnjcX9YfkafVRY5q2x4nLXeh5JYxMyBlUEqkIgs/pubhtml"
-API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "https://paramita-scraper.duckdns.org/api/v1")
+API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://paramita-scraper.duckdns.org/api/v1")
 SCRAPE_ENDPOINT = f"{API_BASE_URL}/scraping/scrape"
 
 
@@ -804,8 +804,8 @@ Examples:
                 
                 print(f"{symbol:<10} {current:<10} {low_price:<10} {status:<10} {discount:<10}")
         else:
-            if not args.quiet:
-                print("No buy opportunities found. All stocks are above their low price thresholds.")
+            # Always print this message as it's the main output, even in quiet mode
+            print("No buy opportunities found. All stocks are above their low price thresholds.")
         
         logger.info(f"Successfully processed {len(stocks)} stocks")
         if buy_opportunities:

@@ -55,24 +55,56 @@ jobs:
 
           echo "📈 Fetching stock prices from spreadsheet..." >&2
 
-          # Run stock price checker using AI Scraper API with CSV fallback
-          STOCK_OUTPUT=$(./client/get_stock_prices.sh --api http://paramita-scraper.duckdns.org/api/v1 --output table --quiet)
+          # Test API connectivity first
+          echo "🔍 Testing API connectivity..." >&2
+          if curl -f -s -m 10 http://paramita-scraper.duckdns.org/health > /dev/null; then
+            echo "✅ API is accessible" >&2
+          else
+            echo "⚠️ API health check failed, will use CSV fallback" >&2
+          fi
 
+          # Run stock price checker using AI Scraper API with CSV fallback
+          echo "📊 Running stock price fetcher..." >&2
+          set +e  # Allow script to continue if stock fetch fails
+          STOCK_OUTPUT=$(./client/get_stock_prices.sh --api http://paramita-scraper.duckdns.org/api/v1 --output table 2>&1)
+          FETCH_EXIT_CODE=$?
+          set -e
+
+          echo "Stock fetcher exit code: $FETCH_EXIT_CODE" >&2
           echo "Stock output received:" >&2
           echo "$STOCK_OUTPUT" >&2
 
-          # Check if we have buy opportunities (table contains price data)
-          if echo "$STOCK_OUTPUT" | grep -q '\$[0-9]'; then
-            echo "🚨 Buy opportunities detected!" >&2
-            HAS_ALERTS="true"
+          # If API failed, try without API (pure CSV fallback)
+          if [ $FETCH_EXIT_CODE -ne 0 ]; then
+            echo "⚠️ API mode failed, trying CSV fallback..." >&2
+            STOCK_OUTPUT=$(./client/get_stock_prices.sh --output table 2>&1)
+            echo "CSV fallback output:" >&2
+            echo "$STOCK_OUTPUT" >&2
+          fi
+
+          # Check if we have valid stock data
+          if echo "$STOCK_OUTPUT" | grep -E -q "(Symbol|Stock|\$[0-9]|Price)"; then
+            echo "📊 Valid stock data received" >&2
             
-            # Extract symbols that have buy opportunities for highlighting
-            ALERT_SYMBOLS=$(echo "$STOCK_OUTPUT" | grep '\$[0-9]' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
-            echo "alert_symbols=$ALERT_SYMBOLS" >> $GITHUB_OUTPUT
+            # Check if we have buy opportunities (table contains price data)
+            if echo "$STOCK_OUTPUT" | grep -q '\$[0-9]'; then
+              echo "🚨 Buy opportunities detected!" >&2
+              HAS_ALERTS="true"
+              
+              # Extract symbols that have buy opportunities for highlighting
+              ALERT_SYMBOLS=$(echo "$STOCK_OUTPUT" | grep '\$[0-9]' | awk '{print $1}' | tr '\n' ',' | sed 's/,$//')
+              echo "alert_symbols=$ALERT_SYMBOLS" >> $GITHUB_OUTPUT
+            else
+              echo "✅ No buy opportunities found" >&2
+              HAS_ALERTS="false"
+              echo "alert_symbols=" >> $GITHUB_OUTPUT
+            fi
           else
-            echo "✅ No buy opportunities found" >&2
+            echo "⚠️ No valid stock data received - may be temporary API issue" >&2
             HAS_ALERTS="false"
             echo "alert_symbols=" >> $GITHUB_OUTPUT
+            # Add warning to stock output
+            STOCK_OUTPUT="⚠️ Stock data temporarily unavailable\n\nThis may be due to:\n- API connectivity issues\n- Google Sheets access problems\n- Temporary service downtime\n\nThe system will retry on the next scheduled run.\n\nOriginal output:\n$STOCK_OUTPUT"
           fi
 
           # Store results for email step
@@ -112,6 +144,24 @@ jobs:
             Current vs Low Price Comparison:
 
             ${{ steps.stock_check.outputs.stock_table }}
+
+      - name: Workflow summary
+        if: always()
+        run: |
+          echo "📊 Stock Price Alert Workflow Summary"
+          echo "====================================="
+          echo "Timestamp: ${{ steps.stock_check.outputs.taipei_time }}"
+          echo "Has Alerts: ${{ steps.stock_check.outputs.has_alerts }}"
+          echo "Alert Symbols: ${{ steps.stock_check.outputs.alert_symbols }}"
+
+          if [[ "${{ steps.stock_check.outputs.has_alerts }}" == "true" ]]; then
+            echo "✅ Email alert sent for symbols: ${{ steps.stock_check.outputs.alert_symbols }}"
+          else
+            echo "✅ No alerts triggered - all stocks above low price thresholds"
+          fi
+
+          echo ""
+          echo "🔍 Next scheduled run: Every day at 21:40 Taipei time (13:40 UTC)"
 
             ---
 
