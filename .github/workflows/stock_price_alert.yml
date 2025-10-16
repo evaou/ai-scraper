@@ -56,7 +56,7 @@ jobs:
           echo "📈 Fetching stock prices from spreadsheet..." >&2
 
           # Run stock price checker using AI Scraper API with CSV fallback
-          STOCK_OUTPUT=$(./client/get_stock_prices.sh --api https://paramita-scraper.duckdns.org/api/v1 --output table --quiet)
+          STOCK_OUTPUT=$(./client/get_stock_prices.sh --api http://paramita-scraper.duckdns.org/api/v1 --output table --quiet)
 
           echo "Stock output received:" >&2
           echo "$STOCK_OUTPUT" >&2
