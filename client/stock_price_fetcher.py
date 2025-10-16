@@ -33,7 +33,7 @@ from io import StringIO
 # Default Configuration
 DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSkBKRRPFnMC85TZbONYkjBU10sJplY1SjJo31SbnnjcX9YfkafVRY5q2x4nLXeh5JYxMyBlUEqkIgs/pubhtml"
 API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://paramita-scraper.duckdns.org/api/v1")
-SCRAPE_ENDPOINT = f"{API_BASE_URL}/scraping/scrape"
+SCRAPE_ENDPOINT = f"{API_BASE_URL}/scrape"
 
 
 class StockFetcherError(Exception):
@@ -109,12 +109,17 @@ def fetch_stock_data_via_api(url: str, api_server: str, timeout: int = 30) -> Li
         json_payload = json.dumps(payload).encode('utf-8')
         
         # Prepare API request
-        api_endpoint = urljoin(api_server.rstrip('/') + '/', 'scraping/scrape')
+        api_endpoint = urljoin(api_server.rstrip('/') + '/', 'scrape')
         headers = {
             'Content-Type': 'application/json',
             'User-Agent': 'StockPriceFetcher/1.0.0',
             'Accept': 'application/json'
         }
+        
+        # Add API key if available
+        api_key = os.getenv('AI_SCRAPER_API_KEY')
+        if api_key:
+            headers['X-API-Key'] = api_key
         
         logger.info(f"Sending scraping request to API: {api_endpoint}")
         
@@ -349,6 +354,9 @@ def fetch_csv_data_fallback(url: str, timeout: int = 30) -> str:
     Raises:
         StockFetcherError: If fetch fails
     """
+    import urllib.request
+    from urllib.request import HTTPRedirectHandler, build_opener
+    
     logger = logging.getLogger(__name__)
     
     try:
@@ -365,9 +373,11 @@ def fetch_csv_data_fallback(url: str, timeout: int = 30) -> str:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
+        # Create opener that handles redirects
+        opener = build_opener(HTTPRedirectHandler)
         request = Request(url, headers=headers)
         
-        with urlopen(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             if response.getcode() != 200:
                 raise StockFetcherError(f"HTTP {response.getcode()}: Failed to fetch data")
             

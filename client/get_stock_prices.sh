@@ -48,7 +48,7 @@ err() { echo "[get_stock_prices][error] $*" >&2; }
 # Initialize variables with defaults first
 url="${STOCK_SHEET_URL:-$DEFAULT_SHEET_URL}"
 config_file=""
-output_format="json"
+output_format="table"
 quiet=false
 debug=false
 

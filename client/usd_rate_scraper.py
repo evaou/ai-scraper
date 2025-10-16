@@ -28,9 +28,9 @@ import html
 
 
 # API Configuration
-API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "https://paramita-scraper.duckdns.org/api/v1")
-SCRAPE_ENDPOINT = f"{API_BASE_URL}/scraping/scrape"
-JOB_DETAIL_ENDPOINT = f"{API_BASE_URL}/scraping/scrape"
+API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://paramita-scraper.duckdns.org/api/v1")
+SCRAPE_ENDPOINT = f"{API_BASE_URL}/scrape"
+JOB_DETAIL_ENDPOINT = f"{API_BASE_URL}/scrape"
 
 
 class ScraperError(Exception):
@@ -98,11 +98,19 @@ def submit_job(url: str, css_selector: Optional[str] = None, options: Optional[D
         # Convert payload to JSON
         json_data = json.dumps(payload).encode('utf-8')
         
-        # Create request
+        # Create request headers
+        headers = {'Content-Type': 'application/json'}
+        
+        # Add API key if available
+        api_key = os.getenv('AI_SCRAPER_API_KEY')
+        if api_key:
+            headers['X-API-Key'] = api_key
+            logger.debug("Using API key for authentication")
+        
         request = Request(
             SCRAPE_ENDPOINT,
             data=json_data,
-            headers={'Content-Type': 'application/json'}
+            headers=headers
         )
         
         # Make request
@@ -146,7 +154,21 @@ def poll_job(job_id: str, interval: int = 2, timeout: int = 60) -> Dict[str, Any
     
     while time.time() - start_time < timeout:
         try:
-            with urlopen(f"{JOB_DETAIL_ENDPOINT}/{job_id}", timeout=10) as response:
+            # Create request headers
+            headers = {'Content-Type': 'application/json'}
+            
+            # Add API key if available
+            api_key = os.getenv('AI_SCRAPER_API_KEY')
+            if api_key:
+                headers['X-API-Key'] = api_key
+            
+            # Create request
+            request = Request(
+                f"{JOB_DETAIL_ENDPOINT}/{job_id}",
+                headers=headers
+            )
+            
+            with urlopen(request, timeout=10) as response:
                 if response.getcode() != 200:
                     raise ScraperError(f"Unexpected status code: {response.getcode()}")
                 

@@ -8,6 +8,7 @@
 # - GMAIL_USERNAME: Your Gmail address
 # - GMAIL_APP_PASSWORD: Your Gmail app password
 # - TO_EMAIL: Email address to receive alerts
+# - JWT_SECRET_KEY: Used for AI Scraper API authentication (enhanced performance)
 #
 # The workflow automatically:
 # 1. Fetches live stock data from Google Sheets
@@ -31,6 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      AI_SCRAPER_API_KEY: ${{ secrets.JWT_SECRET_KEY }}
       TZ: UTC
     steps:
       - name: Checkout repository

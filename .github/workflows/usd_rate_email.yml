@@ -1,3 +1,15 @@
+# Email USD Spot Selling Rate Workflow
+#
+# This workflow fetches USD selling rates and sends email alerts when rates drop below threshold.
+# Uses AI Scraper API for enhanced performance (via JWT_SECRET_KEY authentication) with manual fallback.
+#
+# Required GitHub Secrets:
+# - GMAIL_USERNAME: Your Gmail address
+# - GMAIL_APP_PASSWORD: Your Gmail app password
+# - TO_EMAIL: Email address to receive alerts
+# - USD_RATE_THRESHOLD: Rate threshold (optional, defaults to 32.0)
+# - JWT_SECRET_KEY: Used for AI Scraper API authentication (enhanced performance)
+
 name: Email USD Spot Selling Rate
 
 on:
@@ -15,6 +27,7 @@ jobs:
     timeout-minutes: 10
     env:
       AI_SCRAPER_API_URL: http://paramita-scraper.duckdns.org/api/v1
+      AI_SCRAPER_API_KEY: ${{ secrets.JWT_SECRET_KEY }}
       TZ: UTC
     steps:
       - name: Checkout repository
@@ -43,7 +56,7 @@ jobs:
               ./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" || echo "Verbose run completed with errors" >&2
             fi
             
-            # Actual rate collection with quiet flag
+            # Actual rate collection with quiet flag - try API first, auto-fallback to manual
             RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>/dev/null || true)
             if [ -n "$RATE" ]; then
               echo "✅ Got rate on attempt $i: $RATE" >&2

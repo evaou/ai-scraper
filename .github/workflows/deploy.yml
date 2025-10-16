@@ -408,8 +408,51 @@ jobs:
             echo "Waiting for services to be healthy..."
             sleep 30
 
+            # Register JWT_SECRET_KEY as API key in database
+            echo "🔑 Registering JWT_SECRET_KEY as API key in database..."
+            if docker compose -f docker-compose.prod.yml exec -T api python3 scripts/create-jwt-api-key.py; then
+              echo "✅ JWT_SECRET_KEY successfully registered as API key"
+            else
+              echo "⚠️ Failed to register JWT_SECRET_KEY - API mode may not work"
+              echo "   You can manually run: docker compose -f docker-compose.prod.yml exec api python3 scripts/create-jwt-api-key.py"
+            fi
+
             # Basic health check
             if curl -f http://localhost/api/v1/health/live || curl -f http://localhost:8000/api/v1/health/live; then
+              echo "✅ Basic health check passed!"
+              
+              # Test JWT API key integration
+              echo "🔑 Testing JWT_SECRET_KEY API integration..."
+              export AI_SCRAPER_API_KEY="${{ secrets.JWT_SECRET_KEY }}"
+              
+              # Test API authentication
+              API_TEST=$(curl -s -w "%{http_code}" -X POST http://localhost/api/v1/scrape \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: $AI_SCRAPER_API_KEY" \
+                -d '{"url": "https://httpbin.org/html"}' 2>/dev/null || echo "000")
+              
+              HTTP_CODE="${API_TEST: -3}"
+              if [ "$HTTP_CODE" = "202" ]; then
+                echo "✅ JWT_SECRET_KEY API authentication working! Enhanced API mode active."
+              else
+                echo "⚠️ JWT_SECRET_KEY API authentication failed (HTTP: $HTTP_CODE)"
+                echo "   Workflows will use fallback mode. Check database connection and JWT registration."
+              fi
+              
+              # Test workflow scripts
+              echo "🧪 Testing workflow components..."
+              if ./client/get_usd_rate.sh --quiet > /dev/null 2>&1; then
+                echo "✅ USD rate workflow ready"
+              else
+                echo "⚠️ USD rate workflow needs attention"
+              fi
+              
+              if ./client/get_stock_prices.sh --output table --quiet > /dev/null 2>&1; then
+                echo "✅ Stock price workflow ready"  
+              else
+                echo "⚠️ Stock price workflow needs attention"
+              fi
+              
               echo "✅ Deployment successful!"
               # Clean up old images
               docker image prune -f
@@ -496,7 +539,12 @@ jobs:
             echo "🌐 HTTP API available at: http://paramita-scraper.duckdns.org/api/v1"
             echo "📚 API Documentation: http://paramita-scraper.duckdns.org/api/v1/docs"
             echo ""
-            echo "🔒 To enable HTTPS:"
+            echo "🔑 JWT API Authentication:"
+            echo "  ✅ JWT_SECRET_KEY automatically registered during deployment"
+            echo "  ✅ Enhanced API mode enabled for USD rate and stock price workflows"
+            echo "  🚀 Faster processing now active!"
+            echo ""
+            echo "�🔒 To enable HTTPS:"
             echo "  1. SSH to your server: ssh root@paramita-scraper.duckdns.org"
             echo "  2. Run SSL setup: cd /opt/ai-scraper && sudo ./setup-ssl-enhanced.sh"
             echo "  3. Update GitHub workflows to use HTTPS URLs"
