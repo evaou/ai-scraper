@@ -139,13 +139,22 @@ async def cleanup_old_jobs(
         keep_failed: Whether to keep failed jobs for debugging
     """
     try:
+        logger.info(f"Starting cleanup of jobs older than {older_than_days} days")
+        
+        # Validate parameters
+        if older_than_days < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="older_than_days must be at least 1"
+            )
+        
         deleted_count = await job_crud.delete_old_jobs(
             db,
             older_than_days=older_than_days,
             keep_failed=keep_failed
         )
 
-        logger.info(f"Cleaned up {deleted_count} old jobs (older than {older_than_days} days)")
+        logger.info(f"Successfully cleaned up {deleted_count} old jobs (older than {older_than_days} days)")
 
         return {
             "deleted_count": deleted_count,
@@ -154,11 +163,13 @@ async def cleanup_old_jobs(
             "timestamp": datetime.utcnow().isoformat()
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error during cleanup: {e}")
+        logger.error(f"Error during cleanup: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to cleanup old jobs"
+            detail=f"Failed to cleanup old jobs: {str(e)}"
         )
 
 

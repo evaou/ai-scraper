@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import (
     CommonQueryParams,
     check_rate_limit,
+    get_api_key_when_required,
     get_optional_api_key,
 )
 from app.core.database import get_db
@@ -36,13 +37,13 @@ router = APIRouter()
     response_model=ScrapeResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Submit scraping job",
-    description="Submit a new web scraping job to the queue"
+    description="Submit a new web scraping job to the queue. Requires API key when API_KEY_REQUIRED=true."
 )
 async def submit_scrape_job(
     request: ScrapeRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    api_key: ApiKey | None = Depends(get_optional_api_key),
+    api_key: ApiKey | None = Depends(get_api_key_when_required),
     _rate_limit: None = Depends(check_rate_limit),
 ) -> ScrapeResponse:
     """

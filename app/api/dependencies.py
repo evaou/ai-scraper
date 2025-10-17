@@ -76,6 +76,27 @@ async def get_current_api_key(
     return api_key_obj
 
 
+async def get_api_key_when_required(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security)
+) -> ApiKey | None:
+    """
+    Get API key based on API_KEY_REQUIRED setting.
+    
+    - If API_KEY_REQUIRED=True: Requires valid API key (raises 401 if invalid/missing)
+    - If API_KEY_REQUIRED=False: Optional API key (returns None if not provided)
+    """
+    settings = get_settings()
+    
+    if settings.API_KEY_REQUIRED:
+        # Use strict authentication
+        return await get_current_api_key(request, db, credentials)
+    else:
+        # Use optional authentication
+        return await get_optional_api_key(request, db)
+
+
 async def check_rate_limit(
     request: Request,
     api_key: ApiKey | None = Depends(get_current_api_key)
