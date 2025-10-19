@@ -11,12 +11,13 @@ sys.path.insert(0, '/app')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.core.database import engine
+from sqlalchemy import text
 
 async def check_db():
     """Check database connectivity by executing a simple query."""
     try:
         async with engine.begin() as conn:
-            await conn.execute('SELECT 1')
+            await conn.execute(text('SELECT 1'))
         print('✅ Database connection successful')
         return True
     except Exception as e:

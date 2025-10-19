@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import text
 
 from app.core.config import settings
 
@@ -103,7 +104,7 @@ async def check_database_health() -> dict:
     """
     try:
         async with engine.begin() as conn:
-            result = await conn.execute("SELECT 1")
+            result = await conn.execute(text("SELECT 1"))
             result.fetchone()
 
         pool = engine.pool

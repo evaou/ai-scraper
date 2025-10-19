@@ -17,6 +17,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from sqlalchemy import text
 
 # Add project root to path
 project_root = Path(__file__).parent.parent
@@ -61,7 +62,7 @@ async def create_jwt_api_key() -> tuple[str, str]:
         # Test database connection first
         print("🔍 Testing database connection...")
         async with engine.begin() as conn:
-            await conn.execute("SELECT 1")
+            await conn.execute(text("SELECT 1"))
         print("✅ Database connection successful")
         
         async with async_session() as session:
