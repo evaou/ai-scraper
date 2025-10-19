@@ -287,6 +287,7 @@ def extract_usd_selling_rate(html_content: str, css_selector: Optional[str] = No
     
     try:
         parser = SimpleHTMLParser()
+        rate_text = None  # Initialize rate_text
         
         if css_selector:
             # Use specific selector if provided
