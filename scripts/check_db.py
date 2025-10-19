@@ -4,12 +4,17 @@ Database connectivity checker script for deployment validation.
 """
 import asyncio
 import sys
-from app.core.database import get_engine
+import os
+
+# Add the app directory to Python path for container execution
+sys.path.insert(0, '/app')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.core.database import engine
 
 async def check_db():
     """Check database connectivity by executing a simple query."""
     try:
-        engine = get_engine()
         async with engine.begin() as conn:
             await conn.execute('SELECT 1')
         print('✅ Database connection successful')
