@@ -8,6 +8,7 @@ handling conflicts and ensuring a clean state.
 import asyncio
 import os
 import sys
+import time
 from pathlib import Path
 
 # Add the app directory to Python path
@@ -17,6 +18,26 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy import text
 from app.core.database import engine, Base
 from app.models import api_key, job, result  # Import all models
+
+
+async def test_database_connection(max_retries=5, retry_delay=3):
+    """Test database connection with retries."""
+    print(f"🔍 Testing database connection (max {max_retries} retries)...")
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            print("✅ Database connection successful")
+            return True
+        except Exception as e:
+            if attempt == max_retries:
+                print(f"❌ Database connection failed after {max_retries} attempts: {e}")
+                return False
+            else:
+                print(f"⚠️  Connection attempt {attempt} failed: {e}")
+                print(f"   Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
 
 
 async def check_and_handle_schema():
@@ -161,6 +182,11 @@ async def main():
     print("🚀 Production Database Schema Initialization")
     print("=" * 50)
     
+    # Test database connection first
+    if not await test_database_connection():
+        print("💥 CRITICAL: Cannot connect to database")
+        return 1
+    
     # Check current schema state
     state = await check_and_handle_schema()
     
@@ -170,23 +196,27 @@ async def main():
     elif state == 'cleanup_needed':
         print("🧹 Cleaning up conflicting schema...")
         if not await cleanup_partial_schema():
+            print("❌ CRITICAL: Cleanup failed")
             return 1
         
         print("🏗️  Initializing fresh schema...")
         if not await initialize_schema():
+            print("❌ CRITICAL: Schema initialization failed")
             return 1
             
     elif state == 'initialize':
         print("🏗️  Initializing fresh schema...")
         if not await initialize_schema():
+            print("❌ CRITICAL: Schema initialization failed")
             return 1
             
     else:  # error state
-        print("❌ Unable to determine schema state")
+        print("❌ CRITICAL: Unable to determine schema state")
         return 1
     
     # Final verification
     if not await verify_deployment_ready():
+        print("❌ CRITICAL: Database verification failed")
         return 1
     
     print("\n🎉 Database schema initialization completed!")

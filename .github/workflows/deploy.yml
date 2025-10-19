@@ -395,11 +395,91 @@ jobs:
 
             # Initialize database schema (replaces migrations to avoid conflicts)
             echo "🏗️  Initializing database schema..."
-            if docker compose -f docker-compose.prod.yml exec -T api python3 /app/scripts/init_production_db.py; then
-              echo "✅ Database schema initialized successfully"
+
+            # Pre-flight checks
+            echo "🔍 Pre-flight database schema checks..."
+
+            # Verify database connection with app models
+            echo "🔍 Testing database connection with app models..."
+            if docker compose -f docker-compose.prod.yml exec -T api python3 /app/scripts/check_db.py; then
+              echo "✅ Database connection verified"
             else
-              echo "❌ Database schema initialization failed"
+              echo "❌ Database connection test failed, waiting longer..."
+              sleep 20
+              # Retry once more
+              if docker compose -f docker-compose.prod.yml exec -T api python3 /app/scripts/check_db.py; then
+                echo "✅ Database connection verified on retry"
+              else
+                echo "❌ Database connection still failing, but continuing with schema init..."
+              fi
+            fi
+
+            # Check script availability
+            echo "🔍 Checking script availability in container..."
+            docker compose -f docker-compose.prod.yml exec -T api ls -la /app/scripts/init_production_db.py || echo "⚠️ Script file check failed"
+
+            # Verify dependencies are available
+            echo "🔍 Verifying required dependencies..."
+            docker compose -f docker-compose.prod.yml exec -T api python3 -c 'import sys; sys.path.insert(0, "/app"); from sqlalchemy import text; from app.core.database import engine, Base; from app.models import api_key, job, result; print("✅ All required dependencies available")' || echo "⚠️ Dependency check failed"
+
+            # Main schema initialization attempt
+            echo "🔍 Running schema initialization (attempt 1/3)..."
+            SCHEMA_INIT_SUCCESS=false
+
+            # Method 1: Direct execution
+            if docker compose -f docker-compose.prod.yml exec -T api python3 /app/scripts/init_production_db.py; then
+              echo "✅ Database schema initialized successfully (method 1)"
+              SCHEMA_INIT_SUCCESS=true
+            else
+              echo "❌ Method 1 failed, trying method 2..."
+              
+              # Method 2: Explicit PYTHONPATH and working directory
+              if docker compose -f docker-compose.prod.yml exec -T api bash -c "cd /app && PYTHONPATH=/app python3 scripts/init_production_db.py"; then
+                echo "✅ Schema initialization succeeded (method 2)"
+                SCHEMA_INIT_SUCCESS=true
+              else
+                echo "❌ Method 2 failed, trying method 3..."
+                
+                # Method 3: Force run with environment variable
+                if docker compose -f docker-compose.prod.yml exec -T -e PYTHONPATH=/app api python3 /app/scripts/init_production_db.py; then
+                  echo "✅ Schema initialization succeeded (method 3)"
+                  SCHEMA_INIT_SUCCESS=true
+                else
+                  echo "❌ All schema initialization methods failed"
+                fi
+              fi
+            fi
+
+            # Final validation and error handling
+            if [ "$SCHEMA_INIT_SUCCESS" = false ]; then
+              echo "� CRITICAL: Database schema initialization failed"
+              echo "🔍 Diagnostic information:"
+              echo "📋 Container status:"
+              docker compose -f docker-compose.prod.yml ps
+              echo "📋 API container logs (last 15 lines):"
+              docker compose -f docker-compose.prod.yml logs api | tail -15
+              echo "📋 Database container logs (last 10 lines):"
+              docker compose -f docker-compose.prod.yml logs db | tail -10
+              echo "🔧 Manual fix options:"
+              echo "  1. SSH: ssh root@${{ secrets.LINODE_HOST }}"
+              echo "  2. Navigate: cd /opt/ai-scraper"
+              echo "  3. Run: docker compose exec api python3 /app/scripts/init_production_db.py"
+              echo "  4. Alternative: docker compose exec api python3 /app/scripts/reset_schema.py"
               exit 1
+            else
+              echo "🎉 Database schema initialization completed successfully!"
+              
+              # Verify schema was created correctly
+              echo "🔍 Verifying schema creation with health check..."
+              
+              # Run comprehensive health check
+              echo "🏥 Running comprehensive database health check..."
+              if docker compose -f docker-compose.prod.yml exec -T api python3 /app/scripts/health_check.py; then
+                echo "✅ Database health check passed - system fully operational"
+              else
+                echo "⚠️ Database health check failed, but deployment will continue"
+                echo "🔧 Manual validation recommended after deployment"
+              fi
             fi
 
             # Register JWT_SECRET_KEY as API key in database with retries
@@ -571,8 +651,6 @@ jobs:
 
             # Clean up old images
             docker image prune -f
-              exit 1
-            fi
 
       - name: Deployment skipped message
         if: steps.check-secrets.outputs.deployment-ready == 'false'
