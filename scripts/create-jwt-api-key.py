@@ -42,17 +42,29 @@ async def create_jwt_api_key() -> tuple[str, str]:
         print("   Please ensure JWT_SECRET_KEY is properly configured.")
         return "", ""
     
-    # Database URL - use production settings
-    database_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://scraper_user:password@localhost:5432/scraper_prod")
+    # Database URL - use production settings with retry logic
+    database_url = os.getenv("DATABASE_URL", "postgresql+asyncpg://scraper_user:password@db:5432/scraper_prod")
     print(f"🔍 Database URL: {database_url.split('@')[0]}@***")
     
-    # Create engine and session
-    engine = create_async_engine(database_url, echo=False)
+    # Create engine with connection retry settings
+    engine = create_async_engine(
+        database_url, 
+        echo=False,
+        pool_size=1,
+        max_overflow=0,
+        pool_pre_ping=True,
+        pool_recycle=300
+    )
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     try:
+        # Test database connection first
+        print("🔍 Testing database connection...")
+        async with engine.begin() as conn:
+            await conn.execute("SELECT 1")
+        print("✅ Database connection successful")
+        
         async with async_session() as session:
-            print("🔍 Testing database connection...")
             # Check if an API key with this hash already exists
             key_hash = ApiKey.hash_key(jwt_secret)
             from sqlalchemy import select
@@ -67,6 +79,14 @@ async def create_jwt_api_key() -> tuple[str, str]:
                 print(f"📋 Name: {existing_key.name}")
                 print(f"🏷️  Prefix: {existing_key.key_prefix}")
                 print(f"📊 Active: {existing_key.is_active}")
+                
+                # Ensure it's active
+                if not existing_key.is_active:
+                    print("🔄 Reactivating existing API key...")
+                    existing_key.is_active = True
+                    await session.commit()
+                    print("✅ API key reactivated")
+                
                 return jwt_secret, existing_key.key_prefix
             
             # Create API key with the JWT secret as the raw key
@@ -75,8 +95,8 @@ async def create_jwt_api_key() -> tuple[str, str]:
             api_key = ApiKey(
                 key_hash=key_hash,
                 key_prefix=key_prefix,
-                name="GitHub Actions (JWT)",
-                description="API key created from JWT_SECRET_KEY for GitHub Actions workflows",
+                name="GitHub Actions JWT",
+                description="API key created from JWT_SECRET_KEY for GitHub Actions workflows and production deployment",
                 rate_limit_per_minute=200,  # Higher limits for workflow usage
                 rate_limit_per_hour=2000,
                 rate_limit_per_day=20000,
@@ -87,7 +107,16 @@ async def create_jwt_api_key() -> tuple[str, str]:
             session.add(api_key)
             await session.commit()
             
+            print("✅ New API key created successfully")
             return jwt_secret, api_key.key_prefix
+            
+    except Exception as e:
+        print(f"❌ Database error: {e}")
+        print("🔧 Possible solutions:")
+        print("   1. Check database connection and credentials")
+        print("   2. Ensure database schema is up to date (run migrations)")
+        print("   3. Verify PostgreSQL service is running")
+        return "", ""
             
     finally:
         await engine.dispose()

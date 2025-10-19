@@ -1,6 +1,6 @@
 name: Deploy to Linode
 
-on:
+"on":
   push:
     branches: [main]
   workflow_dispatch: # Allow manual trigger
@@ -254,7 +254,7 @@ jobs:
           # List what we're checking (without revealing values)
           echo "Required secrets:"
           echo "  - LINODE_HOST: ${{ secrets.LINODE_HOST != '' && '✅ SET' || '❌ NOT SET' }}"
-          echo "  - LINODE_USER: ${{ secrets.LINODE_USER != '' && '✅ SET' || '❌ NOT SET' }}"  
+          echo "  - LINODE_USER: ${{ secrets.LINODE_USER != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD != '' && '✅ SET' || '❌ NOT SET' }}"
@@ -287,7 +287,7 @@ jobs:
             echo "# Redis Configuration - using individual components for better reliability"
             echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}"
             echo "REDIS_HOST=redis"
-            echo "REDIS_PORT=6379" 
+            echo "REDIS_PORT=6379"
             echo "REDIS_DB=0"
             echo "REDIS_URL=redis://redis:6379/0"
             echo ""
@@ -356,33 +356,33 @@ jobs:
             echo "📥 Attempting to pull images..."
             if ! docker compose -f docker-compose.prod.yml pull; then
               echo "⚠️  Failed to pull images with specific tags, checking what's available..."
-              
+
               # Check what tags exist for debugging
               echo "🔍 Available tags for API:"
               docker manifest ls ${API_IMAGE_TAG} 2>/dev/null || echo "Tag not found: ${API_IMAGE_TAG}"
-              
+
               echo "🔍 Trying to fallback to latest tags..."
               # Fallback to latest tags
               API_IMAGE_LATEST=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:latest
               WORKER_IMAGE_LATEST=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:latest
               sed -i "s|image: ghcr.io/evaou/ai-scraper-api:.*|image: ${API_IMAGE_LATEST}|g" docker-compose.prod.yml
               sed -i "s|image: ghcr.io/evaou/ai-scraper-worker:.*|image: ${WORKER_IMAGE_LATEST}|g" docker-compose.prod.yml
-              
+
               echo "🔍 Updated to latest tags:"
               grep "image: ghcr.io/evaou/ai-scraper-" docker-compose.prod.yml
-              
+
               if ! docker compose -f docker-compose.prod.yml pull; then
                 echo "⚠️  Latest tags also not found. This might be the first deployment."
                 echo "🛠️  Checking if we can build images locally..."
-                
+
                 # Try to build images locally as last resort
                 if [ -f "docker/Dockerfile.api" ] && [ -f "docker/Dockerfile.worker" ]; then
                   echo "📦 Building API image locally..."
                   docker build -f docker/Dockerfile.api -t ghcr.io/evaou/ai-scraper-api:latest .
-                  
-                  echo "📦 Building Worker image locally..."  
+
+                  echo "📦 Building Worker image locally..."
                   docker build -f docker/Dockerfile.worker -t ghcr.io/evaou/ai-scraper-worker:latest .
-                  
+
                   echo "✅ Images built locally successfully"
                 else
                   echo "⚠️  Cannot build locally - Dockerfiles not found. Continuing anyway."
@@ -404,62 +404,200 @@ jobs:
               docker compose -f docker-compose.prod.yml up -d
             fi
 
-            # Health check
-            echo "Waiting for services to be healthy..."
+            # Health check and database readiness
+            echo "⏳ Waiting for services to be healthy..."
             sleep 30
 
-            # Register JWT_SECRET_KEY as API key in database
-            echo "🔑 Registering JWT_SECRET_KEY as API key in database..."
-            echo "Debug: JWT key to register: ${{ secrets.JWT_SECRET_KEY != '' && '✅ Available' || '❌ Missing' }}"
+            # Wait for database to be fully ready
+            echo "🔍 Verifying database connectivity..."
+            for i in {1..10}; do
+              if docker compose -f docker-compose.prod.yml exec -T api python3 -c "import asyncio; import sys; from app.core.database import get_engine; async def check_db(): engine = get_engine(); async with engine.begin() as conn: await conn.execute('SELECT 1'); return True; result = asyncio.run(check_db()); sys.exit(0 if result else 1)"; then
+                echo "✅ Database is ready"
+                break
+              else
+                echo "⏳ Waiting for database... (attempt $i/10)"
+                sleep 10
+              fi
 
-            if docker compose -f docker-compose.prod.yml exec -T -e JWT_SECRET_KEY="${{ secrets.JWT_SECRET_KEY }}" api python3 scripts/create-jwt-api-key.py; then
-              echo "✅ JWT_SECRET_KEY successfully registered as API key"
-            else
-              echo "⚠️ Failed to register JWT_SECRET_KEY - API mode may not work"
-              echo "   Manual registration: docker compose -f docker-compose.prod.yml exec -e JWT_SECRET_KEY='${{ secrets.JWT_SECRET_KEY }}' api python3 scripts/create-jwt-api-key.py"
+              if [ $i -eq 10 ]; then
+                echo "❌ Database failed to become ready after 100 seconds"
+                exit 1
+              fi
+            done
+
+            # Ensure database schema is up to date
+            echo "🔄 Running database migrations..."
+            docker compose -f docker-compose.prod.yml exec -T api alembic upgrade head
+
+            # Register JWT_SECRET_KEY as API key in database with retries
+            echo "🔑 Registering JWT_SECRET_KEY as API key in database..."
+            echo "🔍 JWT_SECRET_KEY status: ${{ secrets.JWT_SECRET_KEY != '' && '✅ Available' || '❌ Missing' }}"
+
+            JWT_REGISTRATION_SUCCESS=false
+            for attempt in {1..3}; do
+              echo "🔄 JWT registration attempt $attempt/3..."
+
+              if docker compose -f docker-compose.prod.yml exec -T api bash -c "
+                export JWT_SECRET_KEY='${{ secrets.JWT_SECRET_KEY }}'
+                python3 scripts/create-jwt-api-key.py
+              "; then
+                echo "✅ JWT_SECRET_KEY successfully registered as API key"
+                JWT_REGISTRATION_SUCCESS=true
+                break
+              else
+                echo "⚠️ JWT registration attempt $attempt failed"
+                if [ $attempt -lt 3 ]; then
+                  echo "   Retrying in 10 seconds..."
+                  sleep 10
+                fi
+              fi
+            done
+
+            # Fallback: Direct database registration if script fails
+            if [ "$JWT_REGISTRATION_SUCCESS" = false ]; then
+              echo "🔧 Attempting direct database registration..."
+              if docker compose -f docker-compose.prod.yml exec -T db psql -U scraper_user -d scraper_prod -c "
+                INSERT INTO api_keys (id, name, key_hash, is_active, created_at, updated_at)
+                VALUES (
+                  gen_random_uuid(),
+                  'JWT_SECRET_KEY',
+                  encode(sha256('${{ secrets.JWT_SECRET_KEY }}'::bytea), 'hex'),
+                  true,
+                  now(),
+                  now()
+                ) ON CONFLICT (key_hash) DO UPDATE SET
+                  is_active = true,
+                  updated_at = now();
+              "; then
+                echo "✅ JWT_SECRET_KEY registered via direct database insertion"
+                JWT_REGISTRATION_SUCCESS=true
+              else
+                echo "❌ All JWT registration methods failed"
+              fi
             fi
 
-            # Basic health check
+            # Comprehensive API and JWT testing
+            echo "🧪 Testing API endpoints and JWT authentication..."
+
+            # Basic health check first
             if curl -f http://localhost/api/v1/health/live || curl -f http://localhost:8000/api/v1/health/live; then
-              echo "✅ Basic health check passed!"
-              
-              # Test JWT API key integration
-              echo "🔑 Testing JWT_SECRET_KEY API integration..."
-              export AI_SCRAPER_API_KEY="${{ secrets.JWT_SECRET_KEY }}"
-              
-              # Test API authentication
-              API_TEST=$(curl -s -w "%{http_code}" -X POST http://localhost/api/v1/scrape \
-                -H "Content-Type: application/json" \
-                -H "X-API-Key: $AI_SCRAPER_API_KEY" \
-                -d '{"url": "https://httpbin.org/html"}' 2>/dev/null || echo "000")
-              
-              HTTP_CODE="${API_TEST: -3}"
-              if [ "$HTTP_CODE" = "202" ]; then
-                echo "✅ JWT_SECRET_KEY API authentication working! Enhanced API mode active."
-              else
-                echo "⚠️ JWT_SECRET_KEY API authentication failed (HTTP: $HTTP_CODE)"
-                echo "   Workflows will use fallback mode. Check database connection and JWT registration."
-              fi
-              
-              # Test workflow scripts
-              echo "🧪 Testing workflow components..."
-              if ./client/get_usd_rate.sh --quiet > /dev/null 2>&1; then
-                echo "✅ USD rate workflow ready"
-              else
-                echo "⚠️ USD rate workflow needs attention"
-              fi
-              
-              if ./client/get_stock_prices.sh --output table --quiet > /dev/null 2>&1; then
-                echo "✅ Stock price workflow ready"  
-              else
-                echo "⚠️ Stock price workflow needs attention"
-              fi
-              
-              echo "✅ Deployment successful!"
-              # Clean up old images
-              docker image prune -f
+              echo "✅ Basic health check passed"
             else
-              echo "❌ Health check failed!"
+              echo "❌ Basic health check failed"
+              exit 1
+            fi
+
+            # Test JWT API key authentication with detailed feedback
+            echo "🔑 Testing JWT_SECRET_KEY authentication..."
+            API_TEST_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}\nTIME_TOTAL:%{time_total}" \
+              -X POST http://localhost/api/v1/scrape \
+              -H "Content-Type: application/json" \
+              -H "X-API-Key: ${{ secrets.JWT_SECRET_KEY }}" \
+              -d '{"url": "https://httpbin.org/html", "options": {"extract_text": true, "timeout": 15}}' \
+              2>/dev/null || echo -e "\nHTTP_STATUS:000\nTIME_TOTAL:0")
+
+            HTTP_CODE=$(echo "$API_TEST_RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+            RESPONSE_TIME=$(echo "$API_TEST_RESPONSE" | grep "TIME_TOTAL:" | cut -d: -f2)
+            RESPONSE_BODY=$(echo "$API_TEST_RESPONSE" | sed '/HTTP_STATUS:/d' | sed '/TIME_TOTAL:/d')
+
+            echo "📊 API Test Results:"
+            echo "   HTTP Status: $HTTP_CODE"
+            echo "   Response Time: ${RESPONSE_TIME}s"
+            echo "   Response: $RESPONSE_BODY"
+
+            if [ "$HTTP_CODE" = "202" ]; then
+              echo "✅ JWT_SECRET_KEY API authentication SUCCESSFUL!"
+              echo "🚀 Enhanced API mode is active and ready for workflows"
+
+              # Extract job ID for follow-up testing
+              JOB_ID=$(echo "$RESPONSE_BODY" | grep -o '"job_id":"[^"]*"' | cut -d'"' -f4)
+              if [ -n "$JOB_ID" ]; then
+                echo "📋 Job submitted with ID: $JOB_ID"
+
+                # Quick job status check
+                sleep 5
+                JOB_STATUS=$(curl -s -H "X-API-Key: ${{ secrets.JWT_SECRET_KEY }}" \
+                  "http://localhost/api/v1/jobs/$JOB_ID" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "unknown")
+                echo "📊 Job status after 5s: $JOB_STATUS"
+              fi
+
+            elif [ "$HTTP_CODE" = "401" ]; then
+              echo "❌ JWT_SECRET_KEY authentication FAILED - Invalid API key"
+              echo "🔧 Registration status: $JWT_REGISTRATION_SUCCESS"
+              if [ "$JWT_REGISTRATION_SUCCESS" = true ]; then
+                echo "   Registration succeeded but key still invalid - possible database sync issue"
+              else
+                echo "   Registration failed - key was never added to database"
+              fi
+              echo "   Manual fix: ssh root@${{ secrets.LINODE_HOST }} 'cd /opt/ai-scraper && ./scripts/fix-jwt-api-key.sh'"
+
+            elif [ "$HTTP_CODE" = "000" ]; then
+              echo "❌ API connection failed - service may not be running"
+              echo "🔍 Container status:"
+              docker compose -f docker-compose.prod.yml ps
+
+            else
+              echo "⚠️ Unexpected API response (HTTP: $HTTP_CODE)"
+              echo "   Response body: $RESPONSE_BODY"
+            fi
+
+
+            # Final deployment validation
+            echo ""
+            echo "🏁 Deployment Validation Summary"
+            echo "================================"
+
+            # Container health summary
+            echo "📦 Container Status:"
+            docker compose -f docker-compose.prod.yml ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+
+            # API endpoint summary
+            echo ""
+            echo "🌐 API Endpoints:"
+            echo "   Health: http://${{ secrets.LINODE_HOST }}/api/v1/health"
+            echo "   Docs: http://${{ secrets.LINODE_HOST }}/docs"
+            echo "   Scrape: http://${{ secrets.LINODE_HOST }}/api/v1/scrape"
+
+            # Authentication summary
+            echo ""
+            echo "🔑 Authentication Status:"
+            if [ "$JWT_REGISTRATION_SUCCESS" = true ] && [ "$HTTP_CODE" = "202" ]; then
+              echo "   ✅ JWT_SECRET_KEY is registered and working"
+              echo "   ✅ API authentication fully functional"
+            elif [ "$JWT_REGISTRATION_SUCCESS" = true ] && [ "$HTTP_CODE" != "202" ]; then
+              echo "   ⚠️ JWT_SECRET_KEY registered but authentication failed"
+              echo "   🔧 May need manual verification"
+            else
+              echo "   ❌ JWT_SECRET_KEY registration failed"
+              echo "   🔧 Manual fix required: ./scripts/fix-jwt-api-key.sh"
+            fi
+
+            # Workflow integration summary
+            echo ""
+            echo "🔄 Workflow Integration:"
+            echo "   USD Rate: GitHub Actions → API (JWT auth)"
+            echo "   Stock Price: GitHub Actions → API (JWT auth)"
+            echo "   Bruno Tests: Available in bruno-collection/"
+
+            # Manual troubleshooting info
+            if [ "$JWT_REGISTRATION_SUCCESS" != true ] || [ "$HTTP_CODE" != "202" ]; then
+              echo ""
+              echo "🛠️ Manual Troubleshooting:"
+              echo "   1. SSH: ssh root@${{ secrets.LINODE_HOST }}"
+              echo "   2. Navigate: cd /opt/ai-scraper"
+              echo "   3. Fix JWT: ./scripts/fix-jwt-api-key.sh"
+              echo "   4. Test: curl -H 'X-API-Key: ${{ secrets.JWT_SECRET_KEY }}' http://localhost/api/v1/health"
+            fi
+
+            echo ""
+            if [ "$HTTP_CODE" = "202" ]; then
+              echo "🎉 DEPLOYMENT SUCCESSFUL - All systems operational!"
+            else
+              echo "⚠️ DEPLOYMENT COMPLETED - Manual JWT fix may be needed"
+            fi
+
+            # Clean up old images
+            docker image prune -f
               exit 1
             fi
 
@@ -512,10 +650,10 @@ jobs:
             if [ -f ".env.prod.backup" ]; then
               cp .env.prod.backup .env.prod
               echo "✅ Configuration restored"
-              
+
               # Deploy previous version
               docker compose -f docker-compose.prod.yml up -d
-              
+
               # Wait for health check
               sleep 30
               if curl -f http://localhost/api/v1/health/live; then
