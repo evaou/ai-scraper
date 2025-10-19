@@ -5,7 +5,7 @@ meta {
 }
 
 delete {
-  url: {{api_base}}/scrape/{{job_id}}
+  url: {{api_base}}/scrape/{{current_job_id}}
   body: none
   auth: none
 }
@@ -16,15 +16,33 @@ headers {
 }
 
 tests {
-  test("Status should be 200 or 404", function() {
+  test("Should return appropriate status code", function() {
     const status = res.getStatus();
-    expect([200, 404]).to.include(status);
+    expect([204, 400, 404]).to.include(status);
   });
   
-  test("Should return cancellation message", function() {
-    if (res.getStatus() === 200) {
+  test("204: Job successfully cancelled", function() {
+    if (res.getStatus() === 204) {
+      console.log("✅ Job successfully cancelled");
+      // 204 No Content means successful cancellation with no response body
+    }
+  });
+  
+  test("400: Job cannot be cancelled", function() {
+    if (res.getStatus() === 400) {
       const body = res.getBody();
+      expect(body).to.have.property('error');
       expect(body).to.have.property('message');
+      console.log("⚠️ Cannot cancel job:", body.message);
+    }
+  });
+  
+  test("404: Job not found", function() {
+    if (res.getStatus() === 404) {
+      const body = res.getBody();
+      expect(body).to.have.property('error');
+      expect(body.message).to.equal('Job not found');
+      console.log("❌ Job not found");
     }
   });
 }
@@ -34,26 +52,63 @@ docs {
 
   Cancel a pending or running scraping job.
 
+  ## ⚠️ Prerequisites
+  
+  **IMPORTANT**: You must run "Submit Scraping Job" first to populate the `{{current_job_id}}` variable.
+  The cancel request must be sent quickly after submission while the job is still pending.
+
   ## Authentication
   
   Requires X-API-Key header when API_KEY_REQUIRED is enabled.
 
   ## Path Parameters
   
-  - `job_id`: UUID of the job to cancel
+  - `job_id`: UUID of the job to cancel (uses `{{current_job_id}}` from Submit Scraping Job)
 
   ## Response Codes
   
-  - `200`: Job cancelled successfully
-  - `404`: Job not found or already completed
-  - `409`: Job cannot be cancelled (already completed/failed)
+  - `204`: Job cancelled successfully (No Content)
+  - `400`: Job cannot be cancelled (already completed/failed/cancelled) OR invalid UUID format
+  - `404`: Job not found
 
-  ## Expected Response
+  ## Expected Responses
   
+  **204 No Content**: Successful cancellation
+  ```
+  (No response body)
+  ```
+  
+  **400 Bad Request**: Cannot cancel job OR validation error
   ```json
   {
-    "message": "Job cancelled successfully",
-    "job_id": "123e4567-e89b-12d3-a456-426614174000"
+    "error": "HTTPException",
+    "message": "Cannot cancel job with status: completed",
+    "details": {"status_code": 400}
   }
   ```
+  
+  **400 Bad Request**: Invalid UUID format (when job_id variable not set)
+  ```json
+  {
+    "error": "ValidationError",
+    "message": "Request validation failed",
+    "details": {"errors": [{"type": "uuid_parsing", "loc": ["path", "job_id"], "msg": "Input should be a valid UUID"}]}
+  }
+  ```
+  
+  **404 Not Found**: Job doesn't exist
+  ```json
+  {
+    "error": "HTTPException", 
+    "message": "Job not found",
+    "details": {"status_code": 404}
+  }
+  ```
+
+  ## Usage Instructions
+  
+  1. First run "Submit Scraping Job" to create a job and set `{{current_job_id}}`
+  2. Immediately run "Cancel Job" while the job is still pending
+  3. If you get 400 "Cannot cancel job with status: completed", the job finished too quickly
+  4. If you get 400 "ValidationError" about UUID, the `{{current_job_id}}` variable wasn't set
 }

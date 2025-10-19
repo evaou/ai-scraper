@@ -37,11 +37,14 @@ body:json {
   }
 }
 
-vars:post-response {
-  job_id: {{res.body.job_id}}
-}
-
 tests {
+  test("Extract and log job_id", function() {
+    const body = res.getBody();
+    const jobId = body.job_id;
+    console.log("Job ID extracted:", jobId);
+    // Store in global variables for other requests
+    bru.setVar("current_job_id", jobId);
+  });
   test("Status should be 202", function() {
     expect(res.getStatus()).to.equal(202);
   });
@@ -50,14 +53,20 @@ tests {
     expect(res.getBody()).to.have.property('job_id');
   });
   
-  test("Should return message", function() {
-    expect(res.getBody()).to.have.property('message');
-  });
-  
   test("Should return status", function() {
     const body = res.getBody();
     expect(body).to.have.property('status');
-    expect(body.status).to.equal('queued');
+    expect(body.status).to.equal('pending');
+  });
+  
+  test("Should return created_at timestamp", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('created_at');
+  });
+  
+  test("Should return estimated_completion", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('estimated_completion');
   });
 }
 
@@ -83,8 +92,11 @@ docs {
   ```json
   {
     "job_id": "123e4567-e89b-12d3-a456-426614174000",
-    "status": "queued",
-    "message": "Job queued successfully"
+    "status": "pending",
+    "url": "https://httpbin.org/html",
+    "created_at": "2025-10-19T22:54:51.413971+00:00",
+    "estimated_completion": "2025-10-19T22:55:21.424525",
+    "priority": 0
   }
   ```
 }

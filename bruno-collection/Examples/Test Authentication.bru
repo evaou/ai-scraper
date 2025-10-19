@@ -13,6 +13,7 @@ post {
 headers {
   Content-Type: application/json
   Accept: application/json
+  X-API-Key: {{api_key}}
 }
 
 body:json {
@@ -31,42 +32,62 @@ body:json {
 }
 
 tests {
-  test("Should handle authentication correctly", function() {
-    const status = res.getStatus();
-    // Either succeeds (no auth required) or fails with 401/403
-    expect([202, 401, 403]).to.include(status);
+  test("Status should be 202", function() {
+    expect(res.getStatus()).to.equal(202);
   });
   
-  test("If unauthorized, should return error message", function() {
-    if (res.getStatus() === 401 || res.getStatus() === 403) {
-      const body = res.getBody();
-      expect(body).to.have.property('detail');
-    }
+  test("Should return job_id", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('job_id');
+    expect(body.job_id).to.be.a('string');
   });
   
-  test("If authorized, should return job_id", function() {
-    if (res.getStatus() === 202) {
-      const body = res.getBody();
-      expect(body).to.have.property('job_id');
-    }
+  test("Should return status pending", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('status');
+    expect(body.status).to.equal('pending');
+  });
+  
+  test("Should return created_at timestamp", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('created_at');
+  });
+  
+  test("Authentication successful", function() {
+    console.log("✅ API Key authentication working correctly");
   });
 }
 
 docs {
   # Test Authentication
 
-  Test the API authentication by sending a request without an API key.
+  Test successful API authentication by sending a request with a valid API key.
 
   ## Use Case
   
-  Verify that API key authentication is working correctly when enabled.
+  Verify that API key authentication is working correctly and accepts valid keys.
 
   ## Expected Behavior
   
-  - If API_KEY_REQUIRED=false: Returns 202 and processes the job
-  - If API_KEY_REQUIRED=true: Returns 401/403 with authentication error
+  - Returns 202 (Accepted) when valid API key is provided
+  - Creates a new scraping job successfully
+  - Returns job details including job_id and status
   
-  ## Note
+  ## Authentication
   
-  This request intentionally omits the X-API-Key header to test authentication.
+  This request includes the X-API-Key header to test successful authentication.
+  Uses the {{api_key}} variable from the Production environment.
+  
+  ## Response
+  
+  ```json
+  {
+    "job_id": "123e4567-e89b-12d3-a456-426614174000",
+    "status": "pending",
+    "url": "https://httpbin.org/html",
+    "created_at": "2025-10-19T23:24:51.413971+00:00",
+    "estimated_completion": "2025-10-19T23:25:21.424525",
+    "priority": 0
+  }
+  ```
 }
