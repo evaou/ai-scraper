@@ -5,23 +5,14 @@ meta {
 }
 
 post {
-  url: {{api_base}}/admin/cleanup
-  body: json
+  url: {{api_base}}/admin/cleanup?older_than_days=30&keep_failed=false
+  body: none
   auth: none
 }
 
 headers {
-  Content-Type: application/json
   X-API-Key: {{api_key}}
   Accept: application/json
-}
-
-body:json {
-  {
-    "older_than_days": 30,
-    "status": ["completed", "failed"],
-    "dry_run": true
-  }
 }
 
 tests {
@@ -31,8 +22,9 @@ tests {
   
   test("Should return cleanup summary", function() {
     const body = res.getBody();
-    expect(body).to.have.property('jobs_deleted');
-    expect(body).to.have.property('dry_run');
+    expect(body).to.have.property('deleted_count');
+    expect(body).to.have.property('older_than_days');
+    expect(body).to.have.property('kept_failed');
   });
 }
 
@@ -45,19 +37,19 @@ docs {
   
   Requires X-API-Key header when API_KEY_REQUIRED is enabled.
 
-  ## Request Body
+  ## Query Parameters
   
-  - `older_than_days`: Delete jobs older than this many days
-  - `status`: Array of job statuses to delete
-  - `dry_run`: If true, only count jobs without deleting
+  - `older_than_days`: Delete jobs older than this many days (default: 30)
+  - `keep_failed`: Whether to keep failed jobs for debugging (default: true)
 
   ## Expected Response
   
   ```json
   {
-    "jobs_deleted": 150,
-    "dry_run": true,
-    "message": "150 jobs would be deleted"
+    "deleted_count": 150,
+    "older_than_days": 30,
+    "kept_failed": false,
+    "timestamp": "2025-10-19T12:00:00"
   }
   ```
 }

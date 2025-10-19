@@ -1,5 +1,5 @@
 """CRUD operations for Job model."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -223,7 +223,7 @@ class JobCRUD:
     ) -> int:
         """Delete old jobs."""
         cutoff_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        cutoff_date = cutoff_date.replace(day=cutoff_date.day - older_than_days)
+        cutoff_date = cutoff_date - timedelta(days=older_than_days)
 
         query = select(Job).where(Job.created_at < cutoff_date)
 
