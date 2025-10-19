@@ -1,0 +1,69 @@
+meta {
+  name: Scrape with Screenshot
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{api_base}}/scrape
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+body:json {
+  {
+    "url": "https://example.com",
+    "selector": null,
+    "options": {
+      "wait_time": 5,
+      "screenshot": true,
+      "extract_links": true,
+      "extract_images": true,
+      "extract_text": true,
+      "timeout": 45,
+      "follow_redirects": true,
+      "viewport_width": 1920,
+      "viewport_height": 1080,
+      "user_agent": "Mozilla/5.0 (compatible; AI-Scraper/1.0)"
+    },
+    "priority": 1,
+    "metadata": {
+      "example": "full_page_capture",
+      "include_screenshot": true
+    }
+  }
+}
+
+tests {
+  test("Status should be 202", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+  
+  test("Should return job_id", function() {
+    expect(res.getBody()).to.have.property('job_id');
+  });
+}
+
+docs {
+  # Scrape with Screenshot
+
+  Example of comprehensive page scraping including screenshot capture.
+
+  ## Use Case
+  
+  When you need visual proof of the page state along with content extraction.
+
+  ## Key Features
+  
+  - Full page screenshot capture
+  - Extract all content types (text, links, images)
+  - Custom viewport size
+  - Higher priority processing
+  - Extended timeout for complex pages
+}

@@ -1,0 +1,40 @@
+meta {
+  name: API Documentation
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/docs
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: text/html
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return HTML content", function() {
+    const contentType = res.getHeader('content-type');
+    expect(contentType).to.include('text/html');
+  });
+}
+
+docs {
+  # API Documentation
+
+  Access the Swagger/OpenAPI documentation for the AI Scraper API.
+
+  ## Use Case
+  
+  View interactive API documentation and test endpoints directly from the browser.
+
+  ## Access
+  
+  Open this URL in a browser to access the full Swagger UI with all available endpoints.
+}

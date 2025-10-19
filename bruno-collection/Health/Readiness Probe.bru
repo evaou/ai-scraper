@@ -1,0 +1,40 @@
+meta {
+  name: Readiness Probe
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{api_base}}/health/ready
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return ready status", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('status');
+    expect(body.status).to.equal('ready');
+  });
+  
+  test("All dependencies should be ready", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('checks');
+    expect(body.checks.database).to.equal(true);
+    expect(body.checks.cache).to.equal(true);
+  });
+}
+
+docs {
+  # Readiness Probe
+
+  Kubernetes readiness probe endpoint. Verifies that all dependencies are ready and the service can accept traffic.
+}

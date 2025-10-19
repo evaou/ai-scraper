@@ -1,0 +1,81 @@
+meta {
+  name: Debug API Key Status
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{api_base}}/scrape
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+body:json {
+  {
+    "url": "https://httpbin.org/html",
+    "options": {
+      "extract_text": true,
+      "timeout": 15
+    },
+    "metadata": {
+      "test": "api_key_debug"
+    }
+  }
+}
+
+tests {
+  test("Check API key validation", function() {
+    const status = res.getStatus();
+    const body = res.getBody();
+    
+    console.log("Response Status:", status);
+    console.log("Response Body:", JSON.stringify(body, null, 2));
+    
+    if (status === 401) {
+      console.log("❌ API key authentication failed");
+      console.log("Possible issues:");
+      console.log("1. JWT_SECRET_KEY not registered as API key in database");
+      console.log("2. API key format is incorrect");
+      console.log("3. API_KEY_REQUIRED is enabled but key is invalid");
+    } else if (status === 202) {
+      console.log("✅ API key authentication successful");
+    } else {
+      console.log("⚠️ Unexpected response status");
+    }
+  });
+}
+
+docs {
+  # Debug API Key Status
+
+  This request helps debug API key authentication issues.
+
+  ## Common Issues:
+
+  1. **JWT_SECRET_KEY not registered**: The deployment script may have failed to register the JWT_SECRET_KEY as a valid API key in the database.
+
+  2. **API key format**: The API system expects the exact JWT_SECRET_KEY value in the X-API-Key header.
+
+  3. **Database connection**: The API key registration script requires a working database connection.
+
+  ## Manual Fix:
+
+  If authentication fails, you can manually register the JWT_SECRET_KEY:
+
+  ```bash
+  # SSH to your server
+  ssh root@paramita-scraper.duckdns.org
+
+  # Navigate to deployment directory
+  cd /opt/ai-scraper
+
+  # Register JWT_SECRET_KEY as API key
+  docker compose -f docker-compose.prod.yml exec -e JWT_SECRET_KEY='your-jwt-secret' api python3 scripts/create-jwt-api-key.py
+  ```
+}

@@ -1,0 +1,72 @@
+meta {
+  name: Test Authentication
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{api_base}}/scrape
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  Accept: application/json
+}
+
+body:json {
+  {
+    "url": "https://httpbin.org/html",
+    "options": {
+      "wait_time": 1,
+      "screenshot": false,
+      "extract_text": true,
+      "timeout": 15
+    },
+    "metadata": {
+      "test": "authentication_check"
+    }
+  }
+}
+
+tests {
+  test("Should handle authentication correctly", function() {
+    const status = res.getStatus();
+    // Either succeeds (no auth required) or fails with 401/403
+    expect([202, 401, 403]).to.include(status);
+  });
+  
+  test("If unauthorized, should return error message", function() {
+    if (res.getStatus() === 401 || res.getStatus() === 403) {
+      const body = res.getBody();
+      expect(body).to.have.property('detail');
+    }
+  });
+  
+  test("If authorized, should return job_id", function() {
+    if (res.getStatus() === 202) {
+      const body = res.getBody();
+      expect(body).to.have.property('job_id');
+    }
+  });
+}
+
+docs {
+  # Test Authentication
+
+  Test the API authentication by sending a request without an API key.
+
+  ## Use Case
+  
+  Verify that API key authentication is working correctly when enabled.
+
+  ## Expected Behavior
+  
+  - If API_KEY_REQUIRED=false: Returns 202 and processes the job
+  - If API_KEY_REQUIRED=true: Returns 401/403 with authentication error
+  
+  ## Note
+  
+  This request intentionally omits the X-API-Key header to test authentication.
+}

@@ -1,0 +1,59 @@
+meta {
+  name: Cancel Job
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{api_base}}/jobs/{{job_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200 or 404", function() {
+    const status = res.getStatus();
+    expect([200, 404]).to.include(status);
+  });
+  
+  test("Should return cancellation message", function() {
+    if (res.getStatus() === 200) {
+      const body = res.getBody();
+      expect(body).to.have.property('message');
+    }
+  });
+}
+
+docs {
+  # Cancel Job
+
+  Cancel a pending or running scraping job.
+
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+
+  ## Path Parameters
+  
+  - `job_id`: UUID of the job to cancel
+
+  ## Response Codes
+  
+  - `200`: Job cancelled successfully
+  - `404`: Job not found or already completed
+  - `409`: Job cannot be cancelled (already completed/failed)
+
+  ## Expected Response
+  
+  ```json
+  {
+    "message": "Job cancelled successfully",
+    "job_id": "123e4567-e89b-12d3-a456-426614174000"
+  }
+  ```
+}

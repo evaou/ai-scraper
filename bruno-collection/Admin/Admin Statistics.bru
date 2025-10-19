@@ -1,0 +1,90 @@
+meta {
+  name: Admin Statistics
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{api_base}}/admin/stats
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+  ~X-API-Key: {{api_key}}
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return job statistics", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('job_stats');
+    expect(body.job_stats).to.have.property('total');
+    expect(body.job_stats).to.have.property('completed');
+    expect(body.job_stats).to.have.property('failed');
+  });
+  
+  test("Should return queue statistics", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('queue_stats');
+    expect(body.queue_stats).to.have.property('pending');
+    expect(body.queue_stats).to.have.property('processing');
+  });
+  
+  test("Should return system statistics", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('system_stats');
+  });
+}
+
+docs {
+  # Admin Statistics
+  
+  Get comprehensive system statistics including job metrics, queue status, cache info, and system resources.
+  
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+  
+  ## Expected Response
+  
+  ```json
+  {
+    "job_stats": {
+      "total": 1000,
+      "pending": 5,
+      "running": 2,
+      "completed": 980,
+      "failed": 13,
+      "cancelled": 0,
+      "retrying": 0,
+      "average_execution_time": 4.2
+    },
+    "queue_stats": {
+      "pending": 5,
+      "processing": 2,
+      "total": 7,
+      "workers": 3
+    },
+    "cache_stats": {
+      "used_memory": 1048576,
+      "used_memory_human": "1MB",
+      "connected_clients": 5,
+      "total_commands_processed": 10000
+    },
+    "system_stats": {
+      "cpu_percent": 15.2,
+      "memory_total": 8589934592,
+      "memory_available": 4294967296,
+      "memory_percent": 50.0,
+      "disk_total": 107374182400,
+      "disk_free": 53687091200,
+      "disk_percent": 50.0
+    }
+  }
+  ```
+}

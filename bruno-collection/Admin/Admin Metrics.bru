@@ -1,0 +1,42 @@
+meta {
+  name: Admin Metrics
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{api_base}}/admin/metrics
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return performance metrics", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('requests_total');
+    expect(body).to.have.property('requests_duration');
+  });
+}
+
+docs {
+  # Admin Metrics
+
+  Get detailed performance metrics and monitoring data for the API.
+
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+
+  ## Expected Response
+  
+  Prometheus-style metrics or JSON metrics depending on Accept header.
+}

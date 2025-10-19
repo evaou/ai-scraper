@@ -1,0 +1,66 @@
+meta {
+  name: Scrape with CSS Selector
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{api_base}}/scrape
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+body:json {
+  {
+    "url": "https://quotes.toscrape.com/",
+    "selector": ".quote",
+    "options": {
+      "wait_time": 3,
+      "screenshot": false,
+      "extract_links": false,
+      "extract_images": false,
+      "extract_text": true,
+      "timeout": 30,
+      "follow_redirects": true,
+      "user_agent": "Bruno API Testing Bot"
+    },
+    "priority": 0,
+    "metadata": {
+      "example": "css_selector_extraction",
+      "target": "quotes"
+    }
+  }
+}
+
+tests {
+  test("Status should be 202", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+  
+  test("Should return job_id", function() {
+    expect(res.getBody()).to.have.property('job_id');
+  });
+}
+
+docs {
+  # Scrape with CSS Selector
+
+  Example of scraping specific content using CSS selectors. This extracts quote content from quotes.toscrape.com.
+
+  ## Use Case
+  
+  When you need to extract specific elements from a page rather than the entire content.
+
+  ## Key Features
+  
+  - CSS selector targeting specific elements
+  - Custom user agent
+  - Text extraction only (no images/links)
+  - Moderate wait time for dynamic content
+}

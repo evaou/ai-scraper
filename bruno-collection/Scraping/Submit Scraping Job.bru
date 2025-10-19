@@ -1,0 +1,90 @@
+meta {
+  name: Submit Scraping Job
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{api_base}}/scrape
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+body:json {
+  {
+    "url": "https://httpbin.org/html",
+    "selector": null,
+    "options": {
+      "wait_time": 2,
+      "screenshot": false,
+      "extract_links": true,
+      "extract_images": false,
+      "extract_text": true,
+      "timeout": 30,
+      "follow_redirects": true
+    },
+    "priority": 0,
+    "metadata": {
+      "test": "basic_scraping",
+      "source": "bruno_collection"
+    }
+  }
+}
+
+vars:post-response {
+  job_id: {{res.body.job_id}}
+}
+
+tests {
+  test("Status should be 202", function() {
+    expect(res.getStatus()).to.equal(202);
+  });
+  
+  test("Should return job_id", function() {
+    expect(res.getBody()).to.have.property('job_id');
+  });
+  
+  test("Should return message", function() {
+    expect(res.getBody()).to.have.property('message');
+  });
+  
+  test("Should return status", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('status');
+    expect(body.status).to.equal('queued');
+  });
+}
+
+docs {
+  # Submit Scraping Job
+
+  Submit a new web scraping job to the queue. This is the main endpoint for initiating scraping tasks.
+
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+
+  ## Request Body
+  
+  - `url`: Target URL to scrape (required)
+  - `selector`: CSS selector for content extraction (optional)
+  - `options`: Scraping configuration options
+  - `priority`: Job priority (0-10, higher = more urgent)
+  - `metadata`: Additional data to store with the job
+
+  ## Expected Response
+  
+  ```json
+  {
+    "job_id": "123e4567-e89b-12d3-a456-426614174000",
+    "status": "queued",
+    "message": "Job queued successfully"
+  }
+  ```
+}

@@ -1,0 +1,65 @@
+meta {
+  name: Queue Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{api_base}}/admin/queue
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return queue information", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('pending');
+    expect(body).to.have.property('processing');
+    expect(body).to.have.property('total');
+  });
+  
+  test("Numbers should be non-negative", function() {
+    const body = res.getBody();
+    expect(body.pending).to.be.at.least(0);
+    expect(body.processing).to.be.at.least(0);
+    expect(body.total).to.be.at.least(0);
+  });
+}
+
+docs {
+  # Queue Status
+
+  Get detailed information about the job queue status and worker activity.
+
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+
+  ## Expected Response
+  
+  ```json
+  {
+    "pending": 5,
+    "processing": 2,
+    "total": 7,
+    "workers": 3,
+    "worker_status": [
+      {
+        "id": "worker-1",
+        "status": "busy",
+        "current_job": "123e4567-e89b-12d3-a456-426614174000",
+        "started_at": "2025-10-19T12:00:00Z"
+      }
+    ]
+  }
+  ```
+}

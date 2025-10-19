@@ -1,0 +1,67 @@
+meta {
+  name: Manual JWT Registration Guide
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}
+  body: none
+  auth: none
+}
+
+docs {
+  # Manual JWT Secret Key Registration
+
+  If you're getting "Invalid API key" errors, the JWT_SECRET_KEY may not be registered in the database.
+
+  ## Step 1: SSH to Your Server
+  ```bash
+  ssh root@paramita-scraper.duckdns.org
+  ```
+
+  ## Step 2: Navigate to Deployment Directory
+  ```bash
+  cd /opt/ai-scraper
+  ```
+
+  ## Step 3: Check Current Environment
+  ```bash
+  # Check if containers are running
+  docker compose -f docker-compose.prod.yml ps
+
+  # Check environment variables
+  docker compose -f docker-compose.prod.yml exec api env | grep JWT
+  ```
+
+  ## Step 4: Register JWT_SECRET_KEY as API Key
+  ```bash
+  # Method 1: Using environment variable
+  docker compose -f docker-compose.prod.yml exec api python3 scripts/create-jwt-api-key.py
+
+  # Method 2: Explicit JWT key (if environment var not set)
+  docker compose -f docker-compose.prod.yml exec -e JWT_SECRET_KEY='your-actual-jwt-secret-here' api python3 scripts/create-jwt-api-key.py
+  ```
+
+  ## Step 5: Verify Registration
+  The script should output:
+  ```
+  ✅ JWT_SECRET_KEY registered successfully as API key
+  📋 Key prefix: jwt_***
+  🔑 Use this key in X-API-Key header: [your-jwt-secret]
+  ```
+
+  ## Step 6: Test the API Key
+  After registration, the JWT_SECRET_KEY value should work as an API key in the X-API-Key header.
+
+  ## Alternative: Check Deployment Logs
+  ```bash
+  # Check if JWT registration happened during deployment
+  docker compose -f docker-compose.prod.yml logs api | grep -i jwt
+  ```
+
+  ## If Still Not Working:
+  1. Verify the JWT_SECRET_KEY value matches exactly
+  2. Check database connectivity: `docker compose -f docker-compose.prod.yml exec api python3 -c "from app.core.database import get_engine; print('DB OK')"`
+  3. Check API key table: `docker compose -f docker-compose.prod.yml exec db psql -U scraper_user -d scraper_prod -c "SELECT COUNT(*) FROM api_keys;"`
+}

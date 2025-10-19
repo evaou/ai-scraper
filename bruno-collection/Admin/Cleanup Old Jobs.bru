@@ -1,0 +1,63 @@
+meta {
+  name: Cleanup Old Jobs
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{api_base}}/admin/cleanup
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+body:json {
+  {
+    "older_than_days": 30,
+    "status": ["completed", "failed"],
+    "dry_run": true
+  }
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return cleanup summary", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('jobs_deleted');
+    expect(body).to.have.property('dry_run');
+  });
+}
+
+docs {
+  # Cleanup Old Jobs
+
+  Clean up old completed or failed jobs to free up database space.
+
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+
+  ## Request Body
+  
+  - `older_than_days`: Delete jobs older than this many days
+  - `status`: Array of job statuses to delete
+  - `dry_run`: If true, only count jobs without deleting
+
+  ## Expected Response
+  
+  ```json
+  {
+    "jobs_deleted": 150,
+    "dry_run": true,
+    "message": "150 jobs would be deleted"
+  }
+  ```
+}

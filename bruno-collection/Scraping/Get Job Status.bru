@@ -1,0 +1,68 @@
+meta {
+  name: Get Job Status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{api_base}}/jobs/{{job_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return job details", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('id');
+    expect(body).to.have.property('status');
+    expect(body).to.have.property('url');
+  });
+  
+  test("Status should be valid", function() {
+    const body = res.getBody();
+    const validStatuses = ['pending', 'running', 'completed', 'failed', 'cancelled', 'retrying'];
+    expect(validStatuses).to.include(body.status);
+  });
+}
+
+docs {
+  # Get Job Status
+
+  Retrieve the current status and details of a specific scraping job.
+
+  ## Authentication
+  
+  Requires X-API-Key header when API_KEY_REQUIRED is enabled.
+
+  ## Path Parameters
+  
+  - `job_id`: UUID of the job to check
+
+  ## Expected Response
+  
+  ```json
+  {
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "status": "completed",
+    "url": "https://example.com",
+    "created_at": "2025-10-19T12:00:00Z",
+    "updated_at": "2025-10-19T12:00:05Z",
+    "completed_at": "2025-10-19T12:00:05Z",
+    "execution_time": 5.2,
+    "result": {
+      "content": "...",
+      "links": [...],
+      "metadata": {...}
+    }
+  }
+  ```
+}

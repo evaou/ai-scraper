@@ -1,0 +1,47 @@
+meta {
+  name: OpenAPI Schema
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/openapi.json
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return valid OpenAPI schema", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('openapi');
+    expect(body).to.have.property('info');
+    expect(body).to.have.property('paths');
+  });
+  
+  test("Should have correct API info", function() {
+    const body = res.getBody();
+    expect(body.info).to.have.property('title');
+    expect(body.info).to.have.property('version');
+  });
+}
+
+docs {
+  # OpenAPI Schema
+
+  Get the complete OpenAPI 3.0 specification for the AI Scraper API.
+
+  ## Use Case
+  
+  - Generate client SDKs
+  - Import into API testing tools
+  - Validate API compliance
+  - Documentation generation
+}

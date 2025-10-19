@@ -1,0 +1,67 @@
+meta {
+  name: List Recent Results
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{api_base}}/jobs?limit=10&status=completed
+  body: none
+  auth: none
+}
+
+headers {
+  X-API-Key: {{api_key}}
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return jobs array", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('jobs');
+    expect(body.jobs).to.be.an('array');
+  });
+  
+  test("Should return pagination info", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('total');
+    expect(body).to.have.property('page');
+    expect(body).to.have.property('limit');
+  });
+}
+
+docs {
+  # List Recent Results
+
+  Get a list of recent scraping jobs with optional filtering and pagination.
+
+  ## Query Parameters
+  
+  - `limit`: Number of results to return (default: 20, max: 100)
+  - `offset`: Number of results to skip (default: 0)
+  - `status`: Filter by job status (pending, running, completed, failed, cancelled, retrying)
+  - `url`: Filter by URL pattern
+
+  ## Expected Response
+  
+  ```json
+  {
+    "jobs": [
+      {
+        "id": "123e4567-e89b-12d3-a456-426614174000",
+        "status": "completed",
+        "url": "https://example.com",
+        "created_at": "2025-10-19T12:00:00Z",
+        "execution_time": 5.2
+      }
+    ],
+    "total": 1,
+    "page": 1,
+    "limit": 10
+  }
+  ```
+}

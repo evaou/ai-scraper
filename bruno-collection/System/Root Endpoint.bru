@@ -1,0 +1,37 @@
+meta {
+  name: Root Endpoint
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/
+  body: none
+  auth: none
+}
+
+headers {
+  Accept: application/json
+}
+
+tests {
+  test("Status should be 200", function() {
+    expect(res.getStatus()).to.equal(200);
+  });
+  
+  test("Should return API information", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('name');
+    expect(body).to.have.property('version');
+  });
+}
+
+docs {
+  # Root Endpoint
+
+  Basic API information endpoint that returns service details.
+
+  ## Use Case
+  
+  Quick check that the API is accessible and responding with basic service information.
+}
