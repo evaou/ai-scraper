@@ -68,7 +68,7 @@ class JobFactory(factory.Factory):
         model = Job
     
     id = factory.LazyFunction(uuid4)
-    url = factory.LazyFunction(lambda: fake.url())
+    url = factory.Sequence(lambda n: f"https://test-site-{n:05d}.example.com/")
     selector = factory.LazyFunction(lambda: fake.random_element(elements=(
         "h1", "p", ".content", "#main", ".article", None
     )))
