@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy project
 COPY app/ ./app/
 COPY migrations/ ./migrations/
+COPY scripts/ ./scripts/
 COPY alembic.ini .
 
 # Create storage directories

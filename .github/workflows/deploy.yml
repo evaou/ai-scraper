@@ -411,7 +411,7 @@ jobs:
             # Wait for database to be fully ready
             echo "🔍 Verifying database connectivity..."
             for i in {1..10}; do
-              if docker compose -f docker-compose.prod.yml exec -T api python3 scripts/check_db.py; then
+              if docker compose -f docker-compose.prod.yml exec -T api python3 /app/scripts/check_db.py; then
                 echo "✅ Database is ready"
                 break
               else
