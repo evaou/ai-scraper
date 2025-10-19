@@ -32,7 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
+      AI_SCRAPER_API_URL: http://paramita-scraper.duckdns.org/api/v1
       AI_SCRAPER_API_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       TZ: UTC
     steps:
       - name: Checkout repository
@@ -57,27 +59,66 @@ jobs:
 
           echo "📈 Fetching stock prices from spreadsheet..." >&2
 
-          # Test API connectivity first
-          echo "🔍 Testing API connectivity..." >&2
-          if curl -f -s -m 10 http://paramita-scraper.duckdns.org/health > /dev/null; then
-            echo "✅ API is accessible" >&2
+          # Validate JWT_SECRET_KEY and test API connectivity
+          if [ -z "$AI_SCRAPER_API_KEY" ]; then
+            echo "⚠️ Warning: JWT_SECRET_KEY not configured - will use CSV fallback mode" >&2
+            echo "   Add JWT_SECRET_KEY to GitHub repository secrets to enable API mode" >&2
+            echo "api_mode=no_key" >> $GITHUB_OUTPUT
           else
-            echo "⚠️ API health check failed, will use CSV fallback" >&2
+            echo "✅ JWT_SECRET_KEY configured for API authentication (${AI_SCRAPER_API_KEY:0:8}...)" >&2
+            echo "🔍 Testing API connectivity and authentication..." >&2
+            
+            # Test API health and authentication
+            if curl -f -s -m 10 http://paramita-scraper.duckdns.org/health > /dev/null; then
+              echo "✅ API server is accessible" >&2
+              
+              # Test authentication with a simple API call
+              AUTH_TEST=$(curl -s -w "%{http_code}" -X POST "$AI_SCRAPER_API_URL/scrape" \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: $AI_SCRAPER_API_KEY" \
+                -d '{"url": "https://httpbin.org/html"}' 2>/dev/null || echo "000")
+              HTTP_CODE="${AUTH_TEST: -3}"
+              
+              if [ "$HTTP_CODE" = "202" ]; then
+                echo "✅ API authentication successful - enhanced mode active" >&2
+                echo "api_mode=enhanced" >> $GITHUB_OUTPUT
+              elif [ "$HTTP_CODE" = "401" ]; then
+                echo "⚠️ API authentication failed - JWT key not registered, using CSV fallback" >&2
+                echo "api_mode=fallback_auth" >> $GITHUB_OUTPUT
+              else
+                echo "⚠️ API server issue (HTTP $HTTP_CODE) - using CSV fallback" >&2
+                echo "api_mode=fallback_server" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "⚠️ API health check failed, will use CSV fallback" >&2
+              echo "api_mode=fallback_health" >> $GITHUB_OUTPUT
+            fi
           fi
 
-          # Run stock price checker using AI Scraper API with CSV fallback
+          # Run stock price checker based on API mode availability
           echo "📊 Running stock price fetcher..." >&2
           set +e  # Allow script to continue if stock fetch fails
-          STOCK_OUTPUT=$(./client/get_stock_prices.sh --api http://paramita-scraper.duckdns.org/api/v1 --output table 2>&1)
-          FETCH_EXIT_CODE=$?
+
+          # Use API mode if authentication was successful
+          API_MODE=$(grep "api_mode=" $GITHUB_OUTPUT | cut -d'=' -f2 || echo "unknown")
+          if [ "$API_MODE" = "enhanced" ]; then
+            echo "🚀 Using enhanced API mode with authentication..." >&2
+            STOCK_OUTPUT=$(./client/get_stock_prices.sh --api "$AI_SCRAPER_API_URL" --output table 2>&1)
+            FETCH_EXIT_CODE=$?
+          else
+            echo "📁 API mode not available ($API_MODE), using CSV fallback..." >&2
+            STOCK_OUTPUT=$(./client/get_stock_prices.sh --output table 2>&1)
+            FETCH_EXIT_CODE=$?
+          fi
+
           set -e
 
           echo "Stock fetcher exit code: $FETCH_EXIT_CODE" >&2
           echo "Stock output received:" >&2
           echo "$STOCK_OUTPUT" >&2
 
-          # If API failed, try without API (pure CSV fallback)
-          if [ $FETCH_EXIT_CODE -ne 0 ]; then
+          # If primary method failed, try fallback
+          if [ $FETCH_EXIT_CODE -ne 0 ] && [ "$API_MODE" = "enhanced" ]; then
             echo "⚠️ API mode failed, trying CSV fallback..." >&2
             STOCK_OUTPUT=$(./client/get_stock_prices.sh --output table 2>&1)
             echo "CSV fallback output:" >&2
@@ -170,7 +211,31 @@ jobs:
           echo "## 📈 Stock Price Alert Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**⏰ Run Time:** ${{ steps.stock_check.outputs.taipei_time }}" >> $GITHUB_STEP_SUMMARY
-          echo "**📊 Data Source:** Google Sheets via AI Scraper API (CSV fallback)" >> $GITHUB_STEP_SUMMARY
+
+          # Add API mode information
+          API_MODE="${{ steps.stock_check.outputs.api_mode }}"
+          case "$API_MODE" in
+            "enhanced")
+              echo "**� Mode:** Enhanced API mode with JWT authentication" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "fallback_auth")
+              echo "**⚙️ Mode:** CSV fallback (JWT key not registered in database)" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "fallback_server")
+              echo "**⚙️ Mode:** CSV fallback (API server issue)" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "fallback_health")
+              echo "**⚙️ Mode:** CSV fallback (API health check failed)" >> $GITHUB_STEP_SUMMARY
+              ;;
+            "no_key")
+              echo "**⚙️ Mode:** CSV fallback (JWT_SECRET_KEY not configured)" >> $GITHUB_STEP_SUMMARY
+              ;;
+            *)
+              echo "**📊 Mode:** CSV mode" >> $GITHUB_STEP_SUMMARY
+              ;;
+          esac
+
+          echo "**📊 Data Source:** Google Sheets (API mode when available, CSV fallback)" >> $GITHUB_STEP_SUMMARY
           echo "**🎯 Alert Logic:** Current Price ≤ Spreadsheet Low Price" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 

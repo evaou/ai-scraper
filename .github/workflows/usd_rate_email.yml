@@ -28,6 +28,7 @@ jobs:
     env:
       AI_SCRAPER_API_URL: http://paramita-scraper.duckdns.org/api/v1
       AI_SCRAPER_API_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       TZ: UTC
     steps:
       - name: Checkout repository
@@ -51,8 +52,10 @@ jobs:
           if [ -z "$AI_SCRAPER_API_KEY" ]; then
             echo "⚠️ Warning: JWT_SECRET_KEY not configured - API mode will not work" >&2
             echo "   Add JWT_SECRET_KEY to GitHub repository secrets to enable enhanced mode" >&2
+            echo "api_mode=no_key" >> $GITHUB_OUTPUT
           else
-            echo "✅ JWT_SECRET_KEY configured for API authentication" >&2
+            echo "✅ JWT_SECRET_KEY configured for API authentication (${AI_SCRAPER_API_KEY:0:8}...)" >&2
+            echo "🔍 Testing API connectivity and authentication..." >&2
           fi
           RATE=""
           for i in 1 2 3; do
