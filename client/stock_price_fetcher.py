@@ -92,17 +92,33 @@ def fetch_stock_data_via_api(url: str, api_server: str, timeout: int = 30) -> Li
     logger = logging.getLogger(__name__)
     
     try:
-        # Ensure we're using the pubhtml URL for API parsing
-        if 'pub?output=csv' in url:
-            url = url.replace('pub?output=csv', 'pubhtml')
-        elif '/pub' in url and 'pubhtml' not in url:
-            url = url.replace('/pub', '/pubhtml')
+        # For Google Sheets, use CSV export for better data extraction
+        if 'pubhtml' in url:
+            url = url.replace('pubhtml', 'pub?output=csv')
+        elif '/pub' not in url and 'spreadsheets' in url:
+            # Add CSV export if missing
+            separator = '&' if '?' in url else '?'
+            url = f"{url}{separator}output=csv"
         
         logger.info(f"Parsing stock data via API from: {url}")
         
-        # Prepare API payload (simple pattern like USD scraper)
+        # Prepare API payload with enhanced options for Google Sheets
         payload = {
-            'url': url
+            'url': url,
+            'options': {
+                'wait_time': 3,
+                'screenshot': False,
+                'extract_links': False,
+                'extract_images': False,
+                'extract_text': True,
+                'timeout': 30,
+                'follow_redirects': True
+            },
+            'priority': 0,
+            'metadata': {
+                'source': 'stock_price_fetcher',
+                'type': 'google_sheets'
+            }
         }
         
         # Convert to JSON
@@ -126,15 +142,33 @@ def fetch_stock_data_via_api(url: str, api_server: str, timeout: int = 30) -> Li
         request = Request(api_endpoint, data=json_payload, headers=headers, method='POST')
         
         with urlopen(request, timeout=timeout) as response:
-            if response.getcode() not in [200, 201]:
-                raise StockFetcherError(f"API returned HTTP {response.getcode()}")
-            
-            api_response = json.loads(response.read().decode('utf-8'))
-            
-            # Extract stock data from API response
-            stocks = extract_stocks_from_api_response(api_response)
-            logger.info(f"Successfully parsed {len(stocks)} stocks via API")
-            return stocks
+            response_code = response.getcode()
+            if response_code == 202:
+                # Async job submitted, need to poll for completion
+                job_response = json.loads(response.read().decode('utf-8'))
+                job_id = job_response.get('job_id')
+                if not job_id:
+                    raise StockFetcherError("No job_id in async response")
+                
+                logger.info(f"Job submitted (ID: {job_id}), polling for completion...")
+                
+                # Poll for job completion
+                api_key = os.getenv('AI_SCRAPER_API_KEY')
+                job_result = poll_job_completion(job_id, api_server, api_key, timeout)
+                
+                # Extract stock data from job result
+                stocks = extract_stocks_from_job_result(job_result)
+                logger.info(f"Successfully parsed {len(stocks)} stocks via async API")
+                return stocks
+                
+            elif response_code in [200, 201]:
+                # Synchronous response (legacy support)
+                api_response = json.loads(response.read().decode('utf-8'))
+                stocks = extract_stocks_from_api_response(api_response)
+                logger.info(f"Successfully parsed {len(stocks)} stocks via sync API")
+                return stocks
+            else:
+                raise StockFetcherError(f"API returned HTTP {response_code}")
             
     except json.JSONDecodeError as e:
         raise StockFetcherError(f"Invalid JSON response from API: {e}")
@@ -142,6 +176,123 @@ def fetch_stock_data_via_api(url: str, api_server: str, timeout: int = 30) -> Li
         raise StockFetcherError(f"API server error: {e}")
     except Exception as e:
         raise StockFetcherError(f"Unexpected API error: {e}")
+
+
+def poll_job_completion(job_id: str, api_server: str, api_key: str, timeout: int = 30) -> Dict[str, Any]:
+    """
+    Poll job status until completion and return result.
+    
+    Args:
+        job_id: Job ID to poll
+        api_server: API server base URL
+        api_key: API authentication key
+        timeout: Total timeout in seconds
+    
+    Returns:
+        Completed job result
+    
+    Raises:
+        StockFetcherError: If polling fails or job fails
+    """
+    logger = logging.getLogger(__name__)
+    
+    import time
+    from urllib.parse import urljoin
+    
+    start_time = time.time()
+    poll_interval = 1  # Start with 1 second intervals
+    max_interval = 5   # Max 5 second intervals
+    
+    while time.time() - start_time < timeout:
+        try:
+            # Check job status
+            job_url = urljoin(api_server.rstrip('/') + '/', f'scrape/{job_id}')
+            headers = {'Accept': 'application/json'}
+            if api_key:
+                headers['X-API-Key'] = api_key
+            
+            request = Request(job_url, headers=headers)
+            
+            with urlopen(request, timeout=10) as response:
+                if response.getcode() != 200:
+                    raise StockFetcherError(f"Job status check failed: HTTP {response.getcode()}")
+                
+                job_status = json.loads(response.read().decode('utf-8'))
+                status = job_status.get('status')
+                
+                if status == 'completed':
+                    logger.info(f"Job {job_id} completed successfully")
+                    return job_status
+                elif status == 'failed':
+                    error_msg = job_status.get('error_message', 'Unknown error')
+                    raise StockFetcherError(f"Job failed: {error_msg}")
+                elif status in ['cancelled']:
+                    raise StockFetcherError(f"Job was {status}")
+                elif status in ['pending', 'running', 'retrying']:
+                    logger.debug(f"Job {job_id} status: {status}, continuing to poll...")
+                else:
+                    logger.warning(f"Unknown job status: {status}, continuing to poll...")
+            
+            # Wait before next poll
+            time.sleep(poll_interval)
+            poll_interval = min(poll_interval * 1.2, max_interval)  # Exponential backoff
+            
+        except (URLError, HTTPError) as e:
+            logger.warning(f"Polling error: {e}, retrying...")
+            time.sleep(poll_interval)
+    
+    raise StockFetcherError(f"Job polling timeout after {timeout} seconds")
+
+
+def extract_stocks_from_job_result(job_result: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Extract stock data from completed job result.
+    
+    Args:
+        job_result: Completed job response
+    
+    Returns:
+        List of stock dictionaries
+    
+    Raises:
+        DataParsingError: If extraction fails
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Extract data from job result
+        data = job_result.get('data', {})
+        if not data:
+            raise DataParsingError("No data in job result")
+        
+        # Try different content fields
+        content = data.get('content') or data.get('html') or data.get('text')
+        if not content:
+            raise DataParsingError("No content found in job data")
+        
+        logger.info(f"Processing scraped content: {content[:100]}...")
+        
+        # Check if this looks like CSV data (comma-separated, has headers)
+        content_str = str(content)
+        if ',' in content_str and ('Symbol' in content_str or 'Price' in content_str):
+            logger.info("Detected CSV-like content, parsing as CSV")
+            # Parse as CSV data
+            stocks = parse_csv_data(content_str)
+        else:
+            logger.info("No CSV pattern detected, using raw data parsing")
+            # Parse as raw HTML/text content
+            stocks = parse_raw_stock_data(content_str)
+        
+        # Add metadata
+        for stock in stocks:
+            stock['source'] = 'ai_scraper_async_api'
+            stock['fetched_at'] = datetime.utcnow().isoformat() + 'Z'
+            stock['job_id'] = job_result.get('job_id')
+        
+        return stocks
+        
+    except Exception as e:
+        raise DataParsingError(f"Failed to extract stocks from job result: {e}")
 
 
 def extract_stocks_from_api_response(api_response: Dict[str, Any]) -> List[Dict[str, Any]]:
