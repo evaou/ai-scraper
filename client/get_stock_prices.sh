@@ -135,14 +135,19 @@ API_FAILED=false
 # Capture both output and stderr to determine actual mode used
 TEMP_LOG=$(mktemp)
 if RESULT=$(python3 "$PYTHON_SCRIPT" "${python_args[@]}" 2>"$TEMP_LOG"); then
-    # Check stderr output to determine if API actually worked or fell back to CSV
-    if grep -q "falling back to CSV parsing" "$TEMP_LOG"; then
+    # Check stderr output to determine actual mode used
+    if grep -q "enhanced workflow mode active" "$TEMP_LOG"; then
+        log "✅ API enhanced mode: Authentication verified, using optimized data retrieval"
+        API_FAILED=false
+    elif grep -q "falling back to CSV parsing" "$TEMP_LOG"; then
         log "API mode failed; retrieved stock data via CSV fallback"
         API_FAILED=true
     elif grep -q "Successfully fetched stock data via AI Scraper API" "$TEMP_LOG"; then
         log "Retrieved stock data via AI Scraper API"
+        API_FAILED=false
     else
         log "Retrieved stock data successfully"
+        API_FAILED=false
     fi
 else
     API_FAILED=true
