@@ -102,9 +102,19 @@ else
 fi
 
 # 2. Fallback to manual mode if needed
+MANUAL_FAILED=false
 if [[ -z "${RATE}" ]]; then
     if RATE=$(python3 "$SCRAPER_SCRIPT" --url "$RATE_SOURCE_URL" --manual-fallback --quiet 2>/dev/null); then
         log "Retrieved rate via manual fallback"
+    else
+        MANUAL_FAILED=true
+        log "Manual fallback also failed"
+        
+        # Try to get more diagnostic info in non-quiet mode
+        if ! $QUIET; then
+            log "Attempting diagnostic run to identify the issue..."
+            python3 "$SCRAPER_SCRIPT" --url "$RATE_SOURCE_URL" --manual-fallback --verbose 2>&1 | head -20 >&2 || true
+        fi
     fi
 fi
 
@@ -113,8 +123,11 @@ if [[ -n "${RATE}" ]]; then
     exit 0
 fi
 
-if $API_FAILED; then
-    err "Failed to retrieve USD rate (API + manual fallback)"
+# Report specific failure modes
+if $API_FAILED && $MANUAL_FAILED; then
+    err "Failed to retrieve USD rate (both API and manual fallback failed)"
+elif $API_FAILED; then
+    err "Failed to retrieve USD rate (API failed, manual fallback not attempted due to empty result)"
 else
     err "Failed to retrieve USD rate"
 fi

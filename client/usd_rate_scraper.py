@@ -400,30 +400,61 @@ def manual_fallback_extraction(url: str, css_selector: Optional[str] = None) -> 
         request.add_header('Connection', 'keep-alive')
         request.add_header('Upgrade-Insecure-Requests', '1')
         
+        logger.debug(f"Making HTTP request to: {url}")
+        
         # Make request
         with urlopen(request, timeout=30) as response:
-            if response.getcode() != 200:
-                logger.error(f"HTTP error: {response.getcode()}")
+            status_code = response.getcode()
+            logger.debug(f"HTTP response status: {status_code}")
+            
+            if status_code != 200:
+                logger.error(f"HTTP error: {status_code} - {response.reason if hasattr(response, 'reason') else 'Unknown error'}")
                 return None
             
             # Read content
             content = response.read()
-            if response.info().get('Content-Encoding') == 'gzip':
+            content_encoding = response.info().get('Content-Encoding')
+            logger.debug(f"Content encoding: {content_encoding}, raw size: {len(content)} bytes")
+            
+            if content_encoding == 'gzip':
                 import gzip
-                content = gzip.decompress(content)
+                try:
+                    content = gzip.decompress(content)
+                    logger.debug(f"Decompressed size: {len(content)} bytes")
+                except Exception as e:
+                    logger.error(f"Failed to decompress gzip content: {e}")
+                    return None
             
-            html_content = content.decode('utf-8', errors='ignore')
-            logger.info(f"Successfully fetched {len(html_content)} characters of HTML content")
-            
-            # Extract rate using the existing function
-            rate = extract_usd_selling_rate(html_content, css_selector)
-            return rate
+            try:
+                html_content = content.decode('utf-8', errors='ignore')
+                logger.info(f"Successfully fetched {len(html_content)} characters of HTML content")
+                
+                # Check for common blocking indicators
+                if len(html_content) < 1000:
+                    logger.warning(f"Received suspiciously short content ({len(html_content)} chars) - possible blocking")
+                
+                if 'blocked' in html_content.lower() or 'access denied' in html_content.lower():
+                    logger.warning("Content suggests request was blocked")
+                
+                # Extract rate using the existing function
+                rate = extract_usd_selling_rate(html_content, css_selector)
+                return rate
+                
+            except UnicodeDecodeError as e:
+                logger.error(f"Failed to decode response content: {e}")
+                return None
             
     except (URLError, HTTPError) as e:
-        logger.error(f"Manual fallback failed: {e}")
+        logger.error(f"Manual fallback network error: {e}")
+        # Check for specific network issues
+        if hasattr(e, 'code'):
+            logger.error(f"HTTP error code: {e.code}")
+        if hasattr(e, 'reason'):
+            logger.error(f"HTTP error reason: {e.reason}")
         return None
     except Exception as e:
         logger.error(f"Unexpected error in manual fallback: {e}")
+        logger.error(f"Error type: {type(e).__name__}")
         return None
 
 

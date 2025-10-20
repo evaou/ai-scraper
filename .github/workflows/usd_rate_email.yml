@@ -48,6 +48,28 @@ jobs:
           set -e
           echo "Fetching USD rate using get_usd_rate.sh..." >&2
 
+          # Test basic connectivity first
+          echo "🔍 Testing network connectivity..." >&2
+          
+          # Test Bank of Taiwan website
+          BOT_STATUS=$(curl -s --connect-timeout 10 -w "%{http_code}" https://rate.bot.com.tw/xrt?Lang=en-US -o /dev/null 2>/dev/null || echo "000")
+          if [ "$BOT_STATUS" = "200" ]; then
+            echo "✅ Bank of Taiwan website accessible (HTTP $BOT_STATUS)" >&2
+          else
+            echo "❌ Warning: Bank of Taiwan website not accessible (HTTP $BOT_STATUS) - may affect manual fallback" >&2
+          fi
+
+          # Test API server connectivity
+          API_STATUS=$(curl -s --connect-timeout 10 -w "%{http_code}" "$AI_SCRAPER_API_URL/health" -o /dev/null 2>/dev/null || echo "000")
+          if [ "$API_STATUS" = "200" ]; then
+            echo "✅ AI Scraper API server accessible (HTTP $API_STATUS)" >&2
+          else
+            echo "❌ Warning: AI Scraper API server not accessible (HTTP $API_STATUS) - API mode will fail" >&2
+          fi
+
+          # Show environment info
+          echo "📊 Environment: GitHub Actions ($(uname -s)), Python $(python3 --version 2>&1 | cut -d' ' -f2)" >&2
+
           # Validate JWT_SECRET_KEY is configured
           if [ -z "$AI_SCRAPER_API_KEY" ]; then
             echo "⚠️ Warning: JWT_SECRET_KEY not configured - API mode will not work" >&2
@@ -86,7 +108,12 @@ jobs:
             fi
             
             # Actual rate collection with quiet flag - try API first, auto-fallback to manual
-            RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>/dev/null || true)
+            # For first attempt, show errors to help debug issues
+            if [ "$i" -eq 1 ]; then
+              RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>&1 || true)
+            else
+              RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>/dev/null || true)
+            fi
             if [ -n "$RATE" ]; then
               echo "✅ Got rate on attempt $i: $RATE" >&2
               break
