@@ -312,14 +312,27 @@ def extract_usd_selling_rate(html_content: str, css_selector: Optional[str] = No
             row_match = table_row_pattern.search(html_content)
             if row_match:
                 row_html = row_match.group(0)
-                # Extract all potential numeric rate cells inside <td> tags for this row
-                cell_values = re.findall(r"<td[^>]*>\s*([0-9]{1,2}\.[0-9]{3})\s*</td>", row_html)
-                if len(cell_values) >= 4:
-                    # Index 3 => Spot Selling
-                    rate_text = cell_values[3]
-                    logger.debug(f"Extracted Spot Selling from table parsing: {rate_text}")
+                logger.debug(f"Found USD table row: {row_html[:200]}...")
+                
+                # First try to find the specific Spot Selling cell
+                spot_selling_match = re.search(r'data-table="Spot Selling"[^>]*>\s*(\d+\.\d+)', row_html)
+                if spot_selling_match:
+                    rate_text = spot_selling_match.group(1)
+                    logger.debug(f"Extracted Spot Selling from data-table attribute: {rate_text}")
                 else:
-                    logger.debug("Table row found but insufficient numeric cells; falling back to pattern search")
+                    # Extract all potential numeric rate cells inside <td> tags for this row
+                    cell_values = re.findall(r"<td[^>]*>\s*([0-9]{1,2}\.[0-9]{2,3})\s*</td>", row_html)
+                    logger.debug(f"Found numeric cells: {cell_values}")
+                    if len(cell_values) >= 4:
+                        # Index 3 => Spot Selling (Cash Buying, Cash Selling, Spot Buying, Spot Selling)
+                        rate_text = cell_values[3]
+                        logger.debug(f"Extracted Spot Selling from table parsing (index 3): {rate_text}")
+                    elif len(cell_values) >= 2:
+                        # If we have at least 2 values, take the higher one (selling > buying)
+                        rate_text = max(cell_values, key=lambda x: float(x))
+                        logger.debug(f"Extracted highest rate as Spot Selling: {rate_text}")
+                    else:
+                        logger.debug("Table row found but insufficient numeric cells; falling back to pattern search")
             else:
                 logger.debug("USD table row not matched; falling back to pattern search")
 
@@ -331,10 +344,16 @@ def extract_usd_selling_rate(html_content: str, css_selector: Optional[str] = No
 
                 # Patterns prioritized for SPOT SELLING (avoid matching cash columns)
                 patterns = [
+                    # Direct match for Spot Selling data attribute (most reliable)
+                    r'data-table="Spot Selling"[^>]*>\s*(\d+\.\d+)',
+                    # Match the table cell structure with Spot Selling
+                    r'<td[^>]*data-table="Spot Selling"[^>]*>\s*(\d+\.\d+)',
                     # Capture Spot Buying then Spot Selling; take second group
                     r'American Dollar \(USD\).*?Spot Buying.*?(\d+\.\d+).*?Spot Selling.*?(\d+\.\d+)',
-                    # Direct attribute marker for Spot Selling cell
-                    r'USD.*?data-table="Spot Selling"[^>]*>\s*(\d+\.\d+)',
+                    # Alternative pattern for the table structure
+                    r'rate-content-sight[^>]*>\s*(\d+\.\d+)\s*</td>\s*</tr>',
+                    # Generic USD rate patterns (broader match)
+                    r'USD.*?(\d{2}\.\d{2,3})',
                     # Generic higher rate heuristic (selling spot is typically higher than buying spot)
                     r'\b(3[0-1]\.[4-9]\d{2})\b',
                     r'\b(3[0-1]\.\d{3})\b',
@@ -389,13 +408,21 @@ def manual_fallback_extraction(url: str, css_selector: Optional[str] = None) -> 
     logger.info("Attempting manual fallback extraction with direct HTTP request")
     
     try:
-        # Create request with standard browser headers
+        # Create request with comprehensive browser headers to avoid detection
         request = Request(url)
         request.add_header('User-Agent', 
-                          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
-        request.add_header('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8')
-        request.add_header('Accept-Language', 'en-US,en;q=0.5')
-        request.add_header('Accept-Encoding', 'gzip, deflate')
+                          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        request.add_header('Accept', 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8')
+        request.add_header('Accept-Language', 'en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7')
+        request.add_header('Accept-Encoding', 'gzip, deflate, br')
+        request.add_header('Cache-Control', 'max-age=0')
+        request.add_header('Sec-Ch-Ua', '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"')
+        request.add_header('Sec-Ch-Ua-Mobile', '?0')
+        request.add_header('Sec-Ch-Ua-Platform', '"macOS"')
+        request.add_header('Sec-Fetch-Site', 'none')
+        request.add_header('Sec-Fetch-Mode', 'navigate')
+        request.add_header('Sec-Fetch-User', '?1')
+        request.add_header('Sec-Fetch-Dest', 'document')
         request.add_header('DNT', '1')
         request.add_header('Connection', 'keep-alive')
         request.add_header('Upgrade-Insecure-Requests', '1')
@@ -502,6 +529,17 @@ def get_usd_selling_rate(url: str, css_selector: Optional[str] = None, **options
         html_content = data.get('html')
         text_content = data.get('content', '')
         
+        # Check for error pages or blocking indicators
+        if text_content and ('error occurred while processing' in text_content.lower() or 
+                           'reference #' in text_content.lower() or
+                           'errors.edgesuite.net' in text_content.lower()):
+            logger.warning("Detected error page or blocking response from website")
+            logger.info("Content indicates request was blocked or rate limited")
+            raise ScraperError(
+                "Website returned error page - likely blocked by anti-bot detection. "
+                "Try using manual fallback mode."
+            )
+        
         if title and not html_content and not text_content:
             logger.warning(f"Website returned title '{title}' but no content - possibly blocked by anti-bot measures")
             logger.info("Suggestion: The website may be using JavaScript to load content or blocking automated requests")
@@ -516,6 +554,13 @@ def get_usd_selling_rate(url: str, css_selector: Optional[str] = None, **options
         if not final_content:
             logger.error("No HTML or text content in job result")
             raise ScraperError("No content returned from scraping job")
+        
+        logger.debug(f"Content length: {len(final_content)} characters")
+        logger.debug(f"Content preview (first 500 chars): {final_content[:500]}")
+        
+        # Check if content contains expected USD references
+        usd_mentions = len(re.findall(r'USD|American Dollar', final_content, re.IGNORECASE))
+        logger.debug(f"Found {usd_mentions} USD/American Dollar mentions in content")
         
         # Extract rate
         rate = extract_usd_selling_rate(final_content, css_selector)
