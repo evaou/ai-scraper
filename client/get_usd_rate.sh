@@ -13,6 +13,7 @@
 #   ./get_usd_rate.sh                  # Production API (defaults to deployed API)
 #   ./get_usd_rate.sh --prod           # Use production API URL (set below or via env)
 #   ./get_usd_rate.sh --api https://api.example.com/api/v1
+#   ./get_usd_rate.sh --enhanced       # Use enhanced anti-detection mode (auto for Bank of Taiwan)
 #   ./get_usd_rate.sh --quiet          # Suppress stderr (only prints rate)
 #   AI_SCRAPER_API_URL=... ./get_usd_rate.sh
 #
@@ -37,6 +38,7 @@ PROD_API_URL_DEFAULT="https://YOUR_PRODUCTION_HOST/api/v1"
 USE_PROD=false
 CUSTOM_API=""
 QUIET=false
+ENHANCED_MODE=false
 
 print_usage() {
     sed -n '1,50p' "$0" | grep -E '^# ' | sed 's/^# //'
@@ -56,6 +58,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --quiet|-q)
             QUIET=true; shift;
+            ;;
+        --enhanced|-e)
+            # Use enhanced anti-detection mode (automatically enabled for Bank of Taiwan)
+            ENHANCED_MODE=true; shift;
             ;;
         --help|-h)
             print_usage; exit 0;

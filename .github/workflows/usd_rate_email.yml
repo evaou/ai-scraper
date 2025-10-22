@@ -1,14 +1,22 @@
 # Email USD Spot Selling Rate Workflow
 #
 # This workflow fetches USD selling rates and sends email alerts when rates drop below threshold.
-# Uses AI Scraper API for enhanced performance (via JWT_SECRET_KEY authentication) with manual fallback.
+# Uses AI Scraper API with smart anti-detection features for bypassing bot protection, with manual fallback.
+#
+# SMART ANTI-DETECTION FEATURES:
+# - Stealth mode: Advanced browser fingerprinting resistance
+# - Human simulation: Realistic mouse movements and interaction delays
+# - Security headers: Modern Chrome browser headers with proper Sec-Ch-Ua values
+# - Viewport simulation: Desktop resolution and proper screen metrics
+# - Resource optimization: Selective resource loading for better performance
+# - Extended timeouts: Patient waiting for dynamic content loading
 #
 # Required GitHub Secrets:
 # - GMAIL_USERNAME: Your Gmail address
 # - GMAIL_APP_PASSWORD: Your Gmail app password
 # - TO_EMAIL: Email address to receive alerts
 # - USD_RATE_THRESHOLD: Rate threshold (optional, defaults to 32.0)
-# - JWT_SECRET_KEY: Used for AI Scraper API authentication (enhanced performance)
+# - JWT_SECRET_KEY: Used for AI Scraper API authentication (smart anti-detection mode)
 
 name: Email USD Spot Selling Rate
 
@@ -30,6 +38,10 @@ jobs:
       AI_SCRAPER_API_KEY: ${{ secrets.JWT_SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       TZ: UTC
+      # Enhanced anti-detection settings
+      USD_SCRAPER_ENHANCED_MODE: true
+      USD_SCRAPER_STEALTH_MODE: true
+      USD_SCRAPER_SIMULATE_HUMAN: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -93,8 +105,9 @@ jobs:
                 -d '{"url": "https://httpbin.org/html"}' 2>/dev/null || echo "000")
               HTTP_CODE="${API_TEST: -3}"
               if [ "$HTTP_CODE" = "202" ]; then
-                echo "✅ API authentication successful - enhanced mode active" >&2
-                echo "api_mode=enhanced" >> $GITHUB_OUTPUT
+                echo "✅ API authentication successful - smart anti-detection mode active" >&2
+                echo "🛡️ Anti-detection features: Stealth mode, human simulation, advanced headers" >&2
+                echo "api_mode=enhanced_smart" >> $GITHUB_OUTPUT
               elif [ "$HTTP_CODE" = "401" ]; then
                 echo "⚠️ API authentication failed (JWT key not registered) - using fallback mode" >&2
                 echo "api_mode=fallback_auth" >> $GITHUB_OUTPUT
@@ -104,23 +117,25 @@ jobs:
               fi
               
               echo "Debug output (verbose):" >&2
-              ./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" || echo "Verbose run completed" >&2
+              ./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --enhanced || echo "Verbose run completed" >&2
             fi
             
-            # Actual rate collection with quiet flag - try API first, auto-fallback to manual
+            # Actual rate collection with enhanced anti-detection - try API first, auto-fallback to manual
             # For first attempt, show errors to help debug issues
             if [ "$i" -eq 1 ]; then
+              echo "🚀 Using enhanced anti-detection mode for API scraping..." >&2
               # Capture stderr separately for debugging while getting clean stdout
-              RATE_OUTPUT=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>&1)
+              RATE_OUTPUT=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --enhanced --quiet 2>&1)
               # Check if output is a valid number (rate) or error message
               if echo "$RATE_OUTPUT" | grep -qE '^[0-9]+\.[0-9]+$'; then
                 RATE="$RATE_OUTPUT"
+                echo "✅ Enhanced API mode successful!" >&2
               else
                 RATE=""
-                echo "Debug error output: $RATE_OUTPUT" >&2
+                echo "⚠️ Enhanced API mode failed, debug output: $RATE_OUTPUT" >&2
               fi
             else
-              RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --quiet 2>/dev/null || true)
+              RATE=$(./client/get_usd_rate.sh --api "$AI_SCRAPER_API_URL" --enhanced --quiet 2>/dev/null || true)
               # Validate that output is numeric
               if ! echo "$RATE" | grep -qE '^[0-9]+\.[0-9]+$'; then
                 RATE=""
@@ -273,6 +288,9 @@ jobs:
             # Use the actual API mode from the collection step
             API_MODE="${{ steps.collect.outputs.api_mode }}"
             case "$API_MODE" in
+              "enhanced_smart")
+                echo "🛡️ **Mode**: Smart Anti-Detection API mode (stealth features, human simulation)" >> $GITHUB_STEP_SUMMARY
+                ;;
               "enhanced")
                 echo "🚀 **Mode**: Enhanced API mode (faster processing)" >> $GITHUB_STEP_SUMMARY
                 ;;

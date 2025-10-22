@@ -664,6 +664,44 @@ def main():
         # Always extract text to improve success rate
         scraping_options["extract_text"] = True
         
+        # Add smart anti-detection features for Bank of Taiwan website
+        if not args.manual_fallback and "rate.bot.com.tw" in args.url:
+            logger.info("Enabling smart anti-detection for Bank of Taiwan")
+            scraping_options.update({
+                # Advanced browser simulation
+                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "viewport": {"width": 1920, "height": 1080},
+                "wait_time": 3,  # Wait for dynamic content to load
+                "stealth_mode": True,  # Enable stealth features
+                "randomize_delays": True,  # Randomize interaction delays
+                
+                # Browser fingerprinting resistance
+                "extra_headers": {
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7",
+                    "Accept-Encoding": "gzip, deflate, br",
+                    "Cache-Control": "max-age=0",
+                    "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+                    "Sec-Ch-Ua-Mobile": "?0",
+                    "Sec-Ch-Ua-Platform": '"macOS"',
+                    "Sec-Fetch-Site": "none",
+                    "Sec-Fetch-Mode": "navigate",
+                    "Sec-Fetch-User": "?1",
+                    "Sec-Fetch-Dest": "document",
+                    "Upgrade-Insecure-Requests": "1"
+                },
+                
+                # Network behavior simulation  
+                "simulate_human": True,  # Human-like mouse movements and clicks
+                "disable_images": False,  # Load images to appear more natural
+                "javascript_enabled": True,  # Enable JS for dynamic content
+                
+                # Additional anti-detection measures
+                "block_resources": ["font", "media"],  # Block non-essential resources for speed
+                "ignore_https_errors": True,
+                "timeout": 30000  # Extended timeout for slow loading
+            })
+        
         rate = get_usd_selling_rate(
             url=args.url,
             css_selector=args.selector,
