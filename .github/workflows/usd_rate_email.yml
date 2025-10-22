@@ -225,7 +225,7 @@ jobs:
           else
             echo "subject=" >> $GITHUB_OUTPUT
           fi
-          
+
           if [ -n "${BODY:-}" ]; then
             BODY_ESCAPED=${BODY//'%'/'%25'}
             BODY_ESCAPED=${BODY_ESCAPED//$'\n'/'%0A'}
@@ -234,7 +234,7 @@ jobs:
           else
             echo "body=" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "send_email=$SEND_EMAIL" >> $GITHUB_OUTPUT
 
       - name: Send email via Gmail SMTP
