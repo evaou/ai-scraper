@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      AI_SCRAPER_API_URL: http://paramita-scraper.duckdns.org/api/v1
+      AI_SCRAPER_API_URL: http://yourname.duckdns.org/api/v1
       AI_SCRAPER_API_KEY: ${{ secrets.JWT_SECRET_KEY }}
       JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
       TZ: UTC
@@ -69,7 +69,7 @@ jobs:
             echo "🔍 Testing API connectivity and authentication..." >&2
             
             # Test API health and authentication
-            if curl -f -s -m 10 http://paramita-scraper.duckdns.org/health > /dev/null; then
+            if curl -f -s -m 10 http://yourname.duckdns.org/health > /dev/null; then
               echo "✅ API server is accessible" >&2
               
               # Test authentication with a simple API call

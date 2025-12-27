@@ -14,7 +14,7 @@ A production-ready, scalable web scraping API built with modern Python technolog
 
 ## 📊 **Project Status**
 
-✅ **Production Deployment**: Live at `paramita-scraper.duckdns.org`  
+✅ **Production Deployment**: Live at `yourname.duckdns.org`  
 ✅ **Architecture**: FastAPI + Pydantic V2, fully containerized with Docker  
 ✅ **CI/CD Pipeline**: Automated GitHub Actions with health checks & rollback  
 ✅ **Authentication**: JWT-based API key system with rate limiting  
@@ -248,9 +248,9 @@ ai-scraper/
 
 ### **Live Instance**
 
-- **URL**: `http://paramita-scraper.duckdns.org`
-- **API Docs**: `http://paramita-scraper.duckdns.org/docs`
-- **Health Check**: `http://paramita-scraper.duckdns.org/api/v1/health`
+- **URL**: `http://yourname.duckdns.org`
+- **API Docs**: `http://yourname.duckdns.org/docs`
+- **Health Check**: `http://yourname.duckdns.org/api/v1/health`
 
 ### **Authentication**
 
@@ -262,7 +262,7 @@ export API_KEY="your-jwt-secret-key"
 
 # Use in requests
 curl -H "X-API-Key: $API_KEY" \
-     "http://paramita-scraper.duckdns.org/api/v1/health"
+     "http://yourname.duckdns.org/api/v1/health"
 ```
 
 ### **Deployment Pipeline**
@@ -339,7 +339,7 @@ app/
 
 ### **Current Production Instance**
 
-- **URL**: `paramita-scraper.duckdns.org`
+- **URL**: `yourname.duckdns.org`
 - **Status**: ✅ Live and operational
 - **Deployment**: Automated via GitHub Actions
 
@@ -376,7 +376,7 @@ If setting up a new server:
 ### **Base URLs**
 
 - **Local**: `http://localhost:8000`
-- **Production**: `http://paramita-scraper.duckdns.org`
+- **Production**: `http://yourname.duckdns.org`
 
 ### **Authentication**
 

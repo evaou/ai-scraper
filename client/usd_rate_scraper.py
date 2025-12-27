@@ -28,7 +28,7 @@ import html
 
 
 # API Configuration
-API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://paramita-scraper.duckdns.org/api/v1")
+API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://yourname.duckdns.org/api/v1")
 SCRAPE_ENDPOINT = f"{API_BASE_URL}/scrape"
 JOB_DETAIL_ENDPOINT = f"{API_BASE_URL}/scrape"
 

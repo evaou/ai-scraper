@@ -79,8 +79,8 @@ api_base: http://localhost:8000/api/v1
 ### Production
 
 ```
-base_url: http://paramita-scraper.duckdns.org
-api_base: http://paramita-scraper.duckdns.org/api/v1
+base_url: http://yourname.duckdns.org
+api_base: http://yourname.duckdns.org/api/v1
 ```
 
 ## 🧪 Testing Workflow

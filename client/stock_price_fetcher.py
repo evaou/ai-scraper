@@ -6,7 +6,7 @@ A script to fetch and parse stock prices from Google Sheets via AI Scraper API.
 Requires a running AI Scraper API server for HTML parsing and data processing.
 
 Usage:
-    python3 stock_price_fetcher.py --url "https://docs.google.com/spreadsheets/..." --api-server "https://paramita-scraper.duckdns.org/api/v1"
+    python3 stock_price_fetcher.py --url "https://docs.google.com/spreadsheets/..." --api-server "https://yourname.duckdns.org/api/v1"
     python3 stock_price_fetcher.py --config config.json
 
 Author: AI Scraper
@@ -32,7 +32,7 @@ from io import StringIO
 
 # Default Configuration
 DEFAULT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSkBKRRPFnMC85TZbONYkjBU10sJplY1SjJo31SbnnjcX9YfkafVRY5q2x4nLXeh5JYxMyBlUEqkIgs/pubhtml"
-API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://paramita-scraper.duckdns.org/api/v1")
+API_BASE_URL = os.getenv("AI_SCRAPER_API_URL", "http://yourname.duckdns.org/api/v1")
 SCRAPE_ENDPOINT = f"{API_BASE_URL}/scrape"
 
 

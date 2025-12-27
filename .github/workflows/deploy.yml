@@ -727,8 +727,8 @@ jobs:
           if [ "${{ needs.deploy.result }}" == "success" ]; then
             echo "✅ Deployment to Linode successful!"
             echo ""
-            echo "🌐 HTTP API available at: http://paramita-scraper.duckdns.org/api/v1"
-            echo "📚 API Documentation: http://paramita-scraper.duckdns.org/api/v1/docs"
+            echo "🌐 HTTP API available at: http://yourname.duckdns.org/api/v1"
+            echo "📚 API Documentation: http://yourname.duckdns.org/api/v1/docs"
             echo ""
             echo "🔑 JWT API Authentication:"
             echo "  ✅ JWT_SECRET_KEY automatically registered during deployment"
@@ -736,7 +736,7 @@ jobs:
             echo "  🚀 Faster processing now active!"
             echo ""
             echo "�🔒 To enable HTTPS:"
-            echo "  1. SSH to your server: ssh root@paramita-scraper.duckdns.org"
+            echo "  1. SSH to your server: ssh root@yourname.duckdns.org"
             echo "  2. Run SSL setup: cd /opt/ai-scraper && sudo ./setup-ssl-enhanced.sh"
             echo "  3. Update GitHub workflows to use HTTPS URLs"
           elif [ "${{ needs.rollback.result }}" == "success" ]; then

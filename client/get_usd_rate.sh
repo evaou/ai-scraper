@@ -33,7 +33,7 @@ RATE_SOURCE_URL="https://rate.bot.com.tw/xrt?Lang=en-US"
 
 # Defaults (can be overridden)
 # Note: API mode requires authentication in production, falls back to manual scraping
-: "${AI_SCRAPER_API_URL:=https://paramita-scraper.duckdns.org/api/v1}"
+: "${AI_SCRAPER_API_URL:=https://yourname.duckdns.org/api/v1}"
 PROD_API_URL_DEFAULT="https://YOUR_PRODUCTION_HOST/api/v1"
 USE_PROD=false
 CUSTOM_API=""

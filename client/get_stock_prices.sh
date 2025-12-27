@@ -11,7 +11,7 @@
 # Usage:
 #   ./get_stock_prices.sh                              # Production API (defaults to deployed API)
 #   ./get_stock_prices.sh --prod                       # Use production API URL
-#   ./get_stock_prices.sh --api http://paramita-scraper.duckdns.org/api/v1
+#   ./get_stock_prices.sh --api http://yourname.duckdns.org/api/v1
 #   ./get_stock_prices.sh --config stock_config.json --quiet
 #   AI_SCRAPER_API_URL=... ./get_stock_prices.sh
 #
@@ -30,8 +30,8 @@ PYTHON_SCRIPT="$SCRIPT_DIR/stock_price_fetcher.py"
 DEFAULT_SHEET_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vSkBKRRPFnMC85TZbONYkjBU10sJplY1SjJo31SbnnjcX9YfkafVRY5q2x4nLXeh5JYxMyBlUEqkIgs/pubhtml"
 
 # Defaults (can be overridden)
-: "${AI_SCRAPER_API_URL:=http://paramita-scraper.duckdns.org/api/v1}"
-PROD_API_URL_DEFAULT="http://paramita-scraper.duckdns.org/api/v1"
+: "${AI_SCRAPER_API_URL:=http://yourname.duckdns.org/api/v1}"
+PROD_API_URL_DEFAULT="http://yourname.duckdns.org/api/v1"
 USE_PROD=false
 CUSTOM_API=""
 QUIET=false
