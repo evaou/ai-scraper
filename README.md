@@ -362,8 +362,8 @@ If setting up a new server:
 
 **Required GitHub Secrets:**
 
-- `LINODE_HOST`: Server IP address
-- `LINODE_USER`: SSH username (usually `root`)
+- `SERVER_HOST`: Server IP address
+- `SERVER_USER`: SSH username (usually `root`)
 - `SSH_PRIVATE_KEY`: SSH private key for server access
 - `POSTGRES_PASSWORD`: Database password
 - `REDIS_PASSWORD`: Redis password

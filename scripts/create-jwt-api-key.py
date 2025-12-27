@@ -33,12 +33,12 @@ async def create_jwt_api_key() -> tuple[str, str]:
     """Create an API key using JWT_SECRET_KEY and return the key and prefix."""
     
     # Get JWT secret key
-    jwt_secret = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
+    jwt_secret = os.getenv(\"JWT_SECRET_KEY\", \"your-secret-key-change-in-production\")
     
-    print(f"🔍 JWT_SECRET_KEY status: {'✅ Available' if jwt_secret and jwt_secret != 'dev-secret-key-change-in-production' else '❌ Missing/Default'}")
+    print(f\"🔍 JWT_SECRET_KEY status: {'✅ Available' if jwt_secret and jwt_secret != 'your-secret-key-change-in-production' else '❌ Missing/Default'}\")
     print(f"🔍 JWT key preview: {jwt_secret[:8]}..." if jwt_secret else "No key available")
     
-    if not jwt_secret or jwt_secret == "dev-secret-key-change-in-production":
+    if not jwt_secret or jwt_secret == \"your-secret-key-change-in-production\":
         print("❌ Error: JWT_SECRET_KEY environment variable not set or using default value.")
         print("   Please ensure JWT_SECRET_KEY is properly configured.")
         return "", ""

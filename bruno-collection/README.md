@@ -206,7 +206,6 @@ Monitor system health with **Admin** endpoints:
 
 - **API Documentation**: Access `/docs` endpoint for interactive Swagger UI
 - **OpenAPI Spec**: Download from `/openapi.json` for client generation
-- **GitHub Repository**: [evaou/ai-scraper](https://github.com/evaou/ai-scraper)
 
 ---
 

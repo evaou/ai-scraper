@@ -1,4 +1,4 @@
-name: Deploy to Linode
+name: Deploy to Production
 
 "on":
   push:
@@ -7,8 +7,8 @@ name: Deploy to Linode
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_API: evaou/ai-scraper-api
-  IMAGE_NAME_WORKER: evaou/ai-scraper-worker
+  IMAGE_NAME_API: yourusername/ai-scraper-api
+  IMAGE_NAME_WORKER: yourusername/ai-scraper-worker
 
 jobs:
   test:
@@ -221,14 +221,14 @@ jobs:
 
           # List what we're checking (without revealing values)
           echo "Required secrets:"
-          echo "  - LINODE_HOST: ${{ secrets.LINODE_HOST != '' && '✅ SET' || '❌ NOT SET' }}"
-          echo "  - LINODE_USER: ${{ secrets.LINODE_USER != '' && '✅ SET' || '❌ NOT SET' }}"
+          echo "  - SERVER_HOST: ${{ secrets.SERVER_HOST != '' && '✅ SET' || '❌ NOT SET' }}"
+          echo "  - SERVER_USER: ${{ secrets.SERVER_USER != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD != '' && '✅ SET' || '❌ NOT SET' }}"
           echo "  - JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY != '' && '✅ SET' || '❌ NOT SET' }}"
 
-          if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+          if [[ -z "${{ secrets.SERVER_HOST }}" || -z "${{ secrets.SERVER_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
             echo "deployment-ready=false" >> $GITHUB_OUTPUT
             echo "❌ Critical deployment secrets not configured - skipping deployment"
             echo ""
@@ -273,8 +273,8 @@ jobs:
         if: steps.check-secrets.outputs.deployment-ready == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.LINODE_HOST }}
-          username: ${{ secrets.LINODE_USER }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           source: "docker-compose.prod.yml,.env.prod,docker/,scripts/"
@@ -285,8 +285,8 @@ jobs:
         if: steps.check-secrets.outputs.deployment-ready == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.LINODE_HOST }}
-          username: ${{ secrets.LINODE_USER }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
@@ -313,12 +313,12 @@ jobs:
             echo "  Worker: ${WORKER_IMAGE_TAG}"
 
             # Update docker-compose.prod.yml with new image tags
-            sed -i "s|image: ghcr.io/evaou/ai-scraper-api:.*|image: ${API_IMAGE_TAG}|g" docker-compose.prod.yml
-            sed -i "s|image: ghcr.io/evaou/ai-scraper-worker:.*|image: ${WORKER_IMAGE_TAG}|g" docker-compose.prod.yml
+            sed -i "s|image: ghcr.io/yourusername/ai-scraper-api:.*|image: ${API_IMAGE_TAG}|g" docker-compose.prod.yml
+            sed -i "s|image: ghcr.io/yourusername/ai-scraper-worker:.*|image: ${WORKER_IMAGE_TAG}|g" docker-compose.prod.yml
 
             # Debug: Show what was actually updated
             echo "🔍 Updated docker-compose.prod.yml images:"
-            grep "image: ghcr.io/evaou/ai-scraper-" docker-compose.prod.yml
+            grep "image: ghcr.io/yourusername/ai-scraper-" docker-compose.prod.yml
 
             # Pull new images with fallback to latest if specific tag fails
             echo "📥 Attempting to pull images..."
@@ -333,11 +333,11 @@ jobs:
               # Fallback to latest tags
               API_IMAGE_LATEST=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}:latest
               WORKER_IMAGE_LATEST=${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WORKER }}:latest
-              sed -i "s|image: ghcr.io/evaou/ai-scraper-api:.*|image: ${API_IMAGE_LATEST}|g" docker-compose.prod.yml
-              sed -i "s|image: ghcr.io/evaou/ai-scraper-worker:.*|image: ${WORKER_IMAGE_LATEST}|g" docker-compose.prod.yml
+              sed -i "s|image: ghcr.io/yourusername/ai-scraper-api:.*|image: ${API_IMAGE_LATEST}|g" docker-compose.prod.yml
+              sed -i "s|image: ghcr.io/yourusername/ai-scraper-worker:.*|image: ${WORKER_IMAGE_LATEST}|g" docker-compose.prod.yml
 
               echo "🔍 Updated to latest tags:"
-              grep "image: ghcr.io/evaou/ai-scraper-" docker-compose.prod.yml
+              grep "image: ghcr.io/yourusername/ai-scraper-" docker-compose.prod.yml
 
               if ! docker compose -f docker-compose.prod.yml pull; then
                 echo "⚠️  Latest tags also not found. This might be the first deployment."
@@ -346,10 +346,10 @@ jobs:
                 # Try to build images locally as last resort
                 if [ -f "docker/Dockerfile.api" ] && [ -f "docker/Dockerfile.worker" ]; then
                   echo "📦 Building API image locally..."
-                  docker build -f docker/Dockerfile.api -t ghcr.io/evaou/ai-scraper-api:latest .
+                  docker build -f docker/Dockerfile.api -t ghcr.io/yourusername/ai-scraper-api:latest .
 
                   echo "📦 Building Worker image locally..."
-                  docker build -f docker/Dockerfile.worker -t ghcr.io/evaou/ai-scraper-worker:latest .
+                  docker build -f docker/Dockerfile.worker -t ghcr.io/yourusername/ai-scraper-worker:latest .
 
                   echo "✅ Images built locally successfully"
                 else
@@ -461,7 +461,7 @@ jobs:
               echo "📋 Database container logs (last 10 lines):"
               docker compose -f docker-compose.prod.yml logs db | tail -10
               echo "🔧 Manual fix options:"
-              echo "  1. SSH: ssh root@${{ secrets.LINODE_HOST }}"
+              echo "  1. SSH: ssh root@${{ secrets.SERVER_HOST }}"
               echo "  2. Navigate: cd /opt/ai-scraper"
               echo "  3. Run: docker compose exec api python3 /app/scripts/init_production_db.py"
               echo "  4. Alternative: docker compose exec api python3 /app/scripts/reset_schema.py"
@@ -582,7 +582,7 @@ jobs:
               else
                 echo "   Registration failed - key was never added to database"
               fi
-              echo "   Manual fix: ssh root@${{ secrets.LINODE_HOST }} 'cd /opt/ai-scraper && ./scripts/fix-jwt-api-key.sh'"
+              echo "   Manual fix: ssh root@${{ secrets.SERVER_HOST }} 'cd /opt/ai-scraper && ./scripts/fix-jwt-api-key.sh'"
 
             elif [ "$HTTP_CODE" = "000" ]; then
               echo "❌ API connection failed - service may not be running"
@@ -607,9 +607,9 @@ jobs:
             # API endpoint summary
             echo ""
             echo "🌐 API Endpoints:"
-            echo "   Health: http://${{ secrets.LINODE_HOST }}/api/v1/health"
-            echo "   Docs: http://${{ secrets.LINODE_HOST }}/docs"
-            echo "   Scrape: http://${{ secrets.LINODE_HOST }}/api/v1/scrape"
+            echo "   Health: http://${{ secrets.SERVER_HOST }}/api/v1/health"
+            echo "   Docs: http://${{ secrets.SERVER_HOST }}/docs"
+            echo "   Scrape: http://${{ secrets.SERVER_HOST }}/api/v1/scrape"
 
             # Authentication summary
             echo ""
@@ -636,7 +636,7 @@ jobs:
             if [ "$JWT_REGISTRATION_SUCCESS" != true ] || [ "$HTTP_CODE" != "202" ]; then
               echo ""
               echo "🛠️ Manual Troubleshooting:"
-              echo "   1. SSH: ssh root@${{ secrets.LINODE_HOST }}"
+              echo "   1. SSH: ssh root@${{ secrets.SERVER_HOST }}"
               echo "   2. Navigate: cd /opt/ai-scraper"
               echo "   3. Fix JWT: ./scripts/fix-jwt-api-key.sh"
               echo "   4. Test: curl -H 'X-API-Key: ${{ secrets.JWT_SECRET_KEY }}' http://localhost/api/v1/health"
@@ -658,8 +658,8 @@ jobs:
           echo "⏭️ Deployment skipped - server secrets not configured"
           echo ""
           echo "To enable deployment, configure the following secrets in GitHub:"
-          echo "  • LINODE_HOST - Your deployment server IP/hostname"
-          echo "  • LINODE_USER - SSH username for your server"
+          echo "  • SERVER_HOST - Your deployment server IP/hostname"
+          echo "  • SERVER_USER - SSH username for your server"
           echo "  • SSH_PRIVATE_KEY - SSH private key content"
           echo "  • POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD - Database credentials"
           echo "  • REDIS_PASSWORD - Redis password"
@@ -675,7 +675,7 @@ jobs:
       - name: Check rollback secrets
         id: check-rollback-secrets
         run: |
-          if [[ -z "${{ secrets.LINODE_HOST }}" || -z "${{ secrets.LINODE_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
+          if [[ -z "${{ secrets.SERVER_HOST }}" || -z "${{ secrets.SERVER_USER }}" || -z "${{ secrets.SSH_PRIVATE_KEY }}" ]]; then
             echo "rollback-ready=false" >> $GITHUB_OUTPUT
             echo "⚠️ Rollback secrets not configured - skipping rollback"
           else
@@ -687,8 +687,8 @@ jobs:
         if: steps.check-rollback-secrets.outputs.rollback-ready == 'true'
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.LINODE_HOST }}
-          username: ${{ secrets.LINODE_USER }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
@@ -725,7 +725,7 @@ jobs:
       - name: Notify deployment status
         run: |
           if [ "${{ needs.deploy.result }}" == "success" ]; then
-            echo "✅ Deployment to Linode successful!"
+            echo \"✅ Deployment to production server successful!\"
             echo ""
             echo "🌐 HTTP API available at: http://yourname.duckdns.org/api/v1"
             echo "📚 API Documentation: http://yourname.duckdns.org/api/v1/docs"
